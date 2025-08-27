@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ulid } from 'ulid';
 import { prisma } from '../index';
 
 const router = Router();
@@ -82,13 +81,9 @@ router.post('/', async (req, res) => {
       }
     });
 
-    // Generate unique Internal ID (ULID)
-    const internalId = ulid();
-    
-    // Create new item
+    // Create new item (PostgreSQL auto-generates sequential ID)
     const item = await prisma.item.create({
       data: {
-        id: internalId,
         isbn: validatedData.isbn,
         conditionGrade: validatedData.conditionGrade,
         conditionNotes: validatedData.conditionNotes,
@@ -103,7 +98,7 @@ router.post('/', async (req, res) => {
     // Log status change
     await prisma.itemStatusHistory.create({
       data: {
-        itemId: internalId,
+        itemId: item.id, // Now using the auto-generated integer ID
         fromStatus: null,
         toStatus: 'INTAKE',
         channel: 'INTAKE',
@@ -116,8 +111,8 @@ router.post('/', async (req, res) => {
       message: 'Item created successfully',
       data: {
         item,
-        internalId,
-        zplTemplate: `/zpl/mercania_item_label.zpl?internalId=${internalId}&intakeDate=${new Date().toISOString().split('T')[0]}`
+        internalId: item.id, // Return the simple integer ID
+        zplTemplate: `/zpl/mercania_item_label.zpl?internalId=${item.id}&intakeDate=${new Date().toISOString().split('T')[0]}`
       }
     });
 

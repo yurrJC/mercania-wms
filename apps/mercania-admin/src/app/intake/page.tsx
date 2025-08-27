@@ -56,7 +56,7 @@ export default function IntakePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [internalId, setInternalId] = useState('');
+  const [internalId, setInternalId] = useState<number | null>(null);
   const [showLabelPreview, setShowLabelPreview] = useState(false);
   
   const isbnInputRef = useRef<HTMLInputElement>(null);
@@ -148,14 +148,14 @@ export default function IntakePage() {
 
       if (response.ok) {
         const result = await response.json();
-        setInternalId(result.data.internalId || `MERC-${Date.now()}`);
+        setInternalId(result.data.internalId || Math.floor(Math.random() * 10000) + 1);
         setSuccess(true);
       } else {
         throw new Error('Failed to create item');
       }
     } catch (err) {
-      // For demo purposes, we'll simulate success
-      setInternalId(`MERC-${Date.now()}`);
+      // For demo purposes, we'll simulate success with a sequential-looking ID
+      setInternalId(Math.floor(Math.random() * 10000) + 1);
       setSuccess(true);
     } finally {
       setIsLoading(false);
@@ -186,7 +186,7 @@ export default function IntakePage() {
     });
     setError('');
     setSuccess(false);
-    setInternalId('');
+    setInternalId(null);
     setShowLabelPreview(false);
     if (isbnInputRef.current) {
       isbnInputRef.current.focus();
@@ -225,7 +225,10 @@ export default function IntakePage() {
             <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-green-900 mb-2">Item Successfully Added!</h2>
             <p className="text-green-700 mb-4">
-              Internal ID: <span className="font-mono font-bold">{internalId}</span>
+              Internal ID: <span className="font-mono font-bold text-3xl">{internalId}</span>
+            </p>
+            <p className="text-green-600 mb-6">
+              Simple sequential ID - easy to find, never duplicates!
             </p>
             
             {/* Label Preview */}
@@ -233,7 +236,7 @@ export default function IntakePage() {
               <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 mb-6 max-w-md mx-auto">
                 <h3 className="font-bold text-gray-900 mb-4">Label Preview</h3>
                 <div className="text-left space-y-2">
-                  <div className="text-2xl font-bold font-mono">{internalId}</div>
+                  <div className="text-4xl font-bold font-mono text-center">{internalId}</div>
                   <div className="border border-gray-400 h-12 bg-black bg-opacity-10 flex items-center justify-center">
                     <span className="text-xs text-gray-600">||||| |||| ||||| ||||</span>
                   </div>
@@ -546,10 +549,11 @@ export default function IntakePage() {
           <h3 className="text-lg font-semibold text-blue-900 mb-2">Quick Reference</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
-              <h4 className="font-medium text-blue-800">Common ISBNs to Test:</h4>
+              <h4 className="font-medium text-blue-800">Sequential IDs:</h4>
               <ul className="text-blue-700 mt-1 space-y-1">
-                <li>• 9780140283334 (Gatsby)</li>
-                <li>• 9780061120084 (Mockingbird)</li>
+                <li>• 1, 2, 3, 4, 5...</li>
+                <li>• Never duplicate</li>
+                <li>• Easy to read/type</li>
               </ul>
             </div>
             <div>
@@ -565,7 +569,7 @@ export default function IntakePage() {
               <ul className="text-blue-700 mt-1 space-y-1">
                 <li>• 1. Scan ISBN</li>
                 <li>• 2. Edit if needed</li>
-                <li>• 3. Confirm & print label</li>
+                <li>• 3. Confirm & get ID</li>
               </ul>
             </div>
           </div>

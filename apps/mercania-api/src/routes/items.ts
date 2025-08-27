@@ -25,11 +25,19 @@ const StatusChangeSchema = z.object({
 router.put('/:id/putaway', async (req, res) => {
   try {
     const { id } = req.params;
+    const itemId = parseInt(id); // Convert string to integer
     const validatedData = PutawaySchema.parse(req.body);
+
+    if (isNaN(itemId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid item ID'
+      });
+    }
 
     // Get current item
     const item = await prisma.item.findUnique({
-      where: { id },
+      where: { id: itemId },
       include: { isbnMaster: true }
     });
 
@@ -49,7 +57,7 @@ router.put('/:id/putaway', async (req, res) => {
 
     // Update item location and status
     const updatedItem = await prisma.item.update({
-      where: { id },
+      where: { id: itemId },
       data: {
         currentLocation: validatedData.location,
         currentStatus: 'STORED'
@@ -60,7 +68,7 @@ router.put('/:id/putaway', async (req, res) => {
     // Log status change
     await prisma.itemStatusHistory.create({
       data: {
-        itemId: id,
+        itemId: itemId,
         fromStatus: 'INTAKE',
         toStatus: 'STORED',
         channel: 'PUTAWAY',
@@ -95,11 +103,19 @@ router.put('/:id/putaway', async (req, res) => {
 router.post('/:id/list', async (req, res) => {
   try {
     const { id } = req.params;
+    const itemId = parseInt(id); // Convert string to integer
     const validatedData = ListingSchema.parse(req.body);
+
+    if (isNaN(itemId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid item ID'
+      });
+    }
 
     // Get current item
     const item = await prisma.item.findUnique({
-      where: { id },
+      where: { id: itemId },
       include: { isbnMaster: true }
     });
 
@@ -120,7 +136,7 @@ router.post('/:id/list', async (req, res) => {
     // Create listing
     const listing = await prisma.listing.create({
       data: {
-        itemId: id,
+        itemId: itemId,
         channel: validatedData.channel,
         externalId: validatedData.externalId,
         priceCents: validatedData.priceCents
@@ -129,7 +145,7 @@ router.post('/:id/list', async (req, res) => {
 
     // Update item status
     const updatedItem = await prisma.item.update({
-      where: { id },
+      where: { id: itemId },
       data: { currentStatus: 'LISTED' },
       include: { isbnMaster: true }
     });
@@ -137,7 +153,7 @@ router.post('/:id/list', async (req, res) => {
     // Log status change
     await prisma.itemStatusHistory.create({
       data: {
-        itemId: id,
+        itemId: itemId,
         fromStatus: 'STORED',
         toStatus: 'LISTED',
         channel: validatedData.channel,
@@ -151,7 +167,7 @@ router.post('/:id/list', async (req, res) => {
       data: {
         listing,
         item: updatedItem,
-        sku: `${item.currentLocation}-${id}`
+        sku: `${item.currentLocation}-${itemId}`
       }
     });
 
@@ -176,11 +192,19 @@ router.post('/:id/list', async (req, res) => {
 router.put('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
+    const itemId = parseInt(id); // Convert string to integer
     const validatedData = StatusChangeSchema.parse(req.body);
+
+    if (isNaN(itemId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid item ID'
+      });
+    }
 
     // Get current item
     const item = await prisma.item.findUnique({
-      where: { id },
+      where: { id: itemId },
       include: { isbnMaster: true }
     });
 
@@ -193,7 +217,7 @@ router.put('/:id/status', async (req, res) => {
 
     // Update item status
     const updatedItem = await prisma.item.update({
-      where: { id },
+      where: { id: itemId },
       data: { currentStatus: validatedData.toStatus },
       include: { isbnMaster: true }
     });
@@ -201,7 +225,7 @@ router.put('/:id/status', async (req, res) => {
     // Log status change
     await prisma.itemStatusHistory.create({
       data: {
-        itemId: id,
+        itemId: itemId,
         fromStatus: item.currentStatus,
         toStatus: validatedData.toStatus,
         channel: validatedData.channel || 'MANUAL',
@@ -236,9 +260,17 @@ router.put('/:id/status', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const itemId = parseInt(id); // Convert string to integer
+
+    if (isNaN(itemId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid item ID'
+      });
+    }
 
     const item = await prisma.item.findUnique({
-      where: { id },
+      where: { id: itemId },
       include: {
         isbnMaster: true,
         statusHistory: {
@@ -292,7 +324,7 @@ router.get('/', async (req, res) => {
       prisma.item.findMany({
         where,
         include: { isbnMaster: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { id: 'desc' }, // Order by ID descending (newest first)
         skip,
         take: limitNum
       }),

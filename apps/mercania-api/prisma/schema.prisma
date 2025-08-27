@@ -46,7 +46,7 @@ model IsbnMaster {
 }
 
 model Item {
-  id              String    @id @db.VarChar(26) // ULID
+  id              Int       @id @default(autoincrement()) // Sequential: 1, 2, 3...
   isbn            String?   @db.VarChar(13)
   conditionGrade  String?   @db.VarChar(10)
   conditionNotes  String?
@@ -67,7 +67,7 @@ model Item {
 
 model ItemStatusHistory {
   id         Int       @id @default(autoincrement())
-  itemId     String    @db.VarChar(26)
+  itemId     Int       // Changed to Int to match Item.id
   fromStatus ItemStatus?
   toStatus   ItemStatus
   channel    String?   @db.VarChar(50)
@@ -81,7 +81,7 @@ model ItemStatusHistory {
 
 model Listing {
   id          Int           @id @default(autoincrement())
-  itemId      String        @db.VarChar(26)
+  itemId      Int           // Changed to Int to match Item.id
   channel     String        @db.VarChar(50)
   externalId  String?       @db.VarChar(100)
   priceCents  Int
@@ -95,7 +95,7 @@ model Listing {
 }
 
 model Order {
-  id         String       @id @db.VarChar(26) // ULID
+  id         Int          @id @default(autoincrement()) // Sequential for orders too
   channel    String       @db.VarChar(50)
   buyer      String?      @db.VarChar(200)
   totalCents Int
@@ -108,8 +108,8 @@ model Order {
 
 model OrderLine {
   id         Int      @id @default(autoincrement())
-  orderId    String   @db.VarChar(26)
-  itemId     String   @db.VarChar(26)
+  orderId    Int      // Changed to Int to match Order.id
+  itemId     Int      // Changed to Int to match Item.id
   qty        Int      @default(1)
   saleCents  Int
 
