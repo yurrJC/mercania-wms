@@ -292,4 +292,4 @@ router.get('/channel-performance', async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
