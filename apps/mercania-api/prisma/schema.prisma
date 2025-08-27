@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ItemStatus {
+  INTAKE
+  STORED
+  LISTED
+  RESERVED
+  SOLD
+  RETURNED
+  DISCARDED
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  EXPIRED
+  REMOVED
+}
+
+model IsbnMaster {
+  id         Int      @id @default(autoincrement())
+  isbn       String   @unique @db.VarChar(13)
+  title      String   @db.VarChar(500)
+  author     String?  @db.VarChar(200)
+  publisher  String?  @db.VarChar(200)
+  pubYear    Int?
+  binding    String?  @db.VarChar(50)
+  imageUrl   String?
+  categories String[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  items Item[]
+
+  @@map("isbn_master")
+}
+
+model Item {
+  id              String    @id @db.VarChar(26) // ULID
+  isbn            String?   @db.VarChar(13)
+  conditionGrade  String?   @db.VarChar(10)
+  conditionNotes  String?
+  costCents       Int       @default(0)
+  intakeDate      DateTime  @default(now())
+  currentStatus   ItemStatus @default(INTAKE)
+  currentLocation String?   @db.VarChar(20)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  isbnMaster        IsbnMaster?        @relation(fields: [isbn], references: [isbn])
+  statusHistory     ItemStatusHistory[]
+  listings          Listing[]
+  orderLines        OrderLine[]
+
+  @@map("items")
+}
+
+model ItemStatusHistory {
+  id         Int       @id @default(autoincrement())
+  itemId     String    @db.VarChar(26)
+  fromStatus ItemStatus?
+  toStatus   ItemStatus
+  channel    String?   @db.VarChar(50)
+  note       String?
+  changedAt  DateTime  @default(now())
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@map("item_status_history")
+}
+
+model Listing {
+  id          Int           @id @default(autoincrement())
+  itemId      String        @db.VarChar(26)
+  channel     String        @db.VarChar(50)
+  externalId  String?       @db.VarChar(100)
+  priceCents  Int
+  status      ListingStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@map("listings")
+}
+
+model Order {
+  id         String       @id @db.VarChar(26) // ULID
+  channel    String       @db.VarChar(50)
+  buyer      String?      @db.VarChar(200)
+  totalCents Int
+  createdAt  DateTime     @default(now())
+
+  orderLines OrderLine[]
+
+  @@map("orders")
+}
+
+model OrderLine {
+  id         Int      @id @default(autoincrement())
+  orderId    String   @db.VarChar(26)
+  itemId     String   @db.VarChar(26)
+  qty        Int      @default(1)
+  saleCents  Int
+
+  order Order @relation(fields: [orderId], references: [id])
+  item  Item  @relation(fields: [itemId], references: [id])
+
+  @@map("order_lines")
+}
