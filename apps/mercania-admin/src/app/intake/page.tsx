@@ -11,7 +11,9 @@ import {
   ArrowLeft,
   Plus,
   DollarSign,
-  Package
+  Package,
+  Printer,
+  Edit3
 } from 'lucide-react';
 
 interface BookData {
@@ -27,6 +29,11 @@ interface BookData {
 
 interface IntakeFormData {
   isbn: string;
+  title: string;
+  author: string;
+  publisher: string;
+  pubYear: number | null;
+  binding: string;
   conditionGrade: string;
   conditionNotes: string;
   costCents: number;
@@ -37,7 +44,12 @@ export default function IntakePage() {
   const [bookData, setBookData] = useState<BookData | null>(null);
   const [formData, setFormData] = useState<IntakeFormData>({
     isbn: '',
-    conditionGrade: '',
+    title: '',
+    author: '',
+    publisher: '',
+    pubYear: null,
+    binding: '',
+    conditionGrade: 'GOOD', // Default to GOOD
     conditionNotes: '',
     costCents: 0
   });
@@ -45,6 +57,7 @@ export default function IntakePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [internalId, setInternalId] = useState('');
+  const [showLabelPreview, setShowLabelPreview] = useState(false);
   
   const isbnInputRef = useRef<HTMLInputElement>(null);
 
@@ -91,7 +104,15 @@ export default function IntakePage() {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       setBookData(mockBookData);
-      setFormData(prev => ({ ...prev, isbn }));
+      setFormData(prev => ({ 
+        ...prev, 
+        isbn,
+        title: mockBookData.title,
+        author: mockBookData.author,
+        publisher: mockBookData.publisher,
+        pubYear: mockBookData.pubYear,
+        binding: mockBookData.binding
+      }));
       
     } catch (err) {
       setError('Failed to fetch book data. Please try again.');
@@ -104,8 +125,8 @@ export default function IntakePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!bookData || !formData.conditionGrade) {
-      setError('Please scan a book and select condition grade');
+    if (!bookData || !formData.conditionGrade || !formData.title) {
+      setError('Please scan a book and fill in required fields');
       return;
     }
 
@@ -117,31 +138,35 @@ export default function IntakePage() {
       const response = await fetch('/api/intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          isbn: formData.isbn,
+          conditionGrade: formData.conditionGrade,
+          conditionNotes: formData.conditionNotes,
+          costCents: formData.costCents
+        })
       });
 
       if (response.ok) {
         const result = await response.json();
-        setInternalId(result.data.internalId || 'MOCK-ID-123');
+        setInternalId(result.data.internalId || `MERC-${Date.now()}`);
         setSuccess(true);
-        
-        // Reset form for next item
-        setTimeout(() => {
-          resetForm();
-        }, 3000);
       } else {
         throw new Error('Failed to create item');
       }
     } catch (err) {
       // For demo purposes, we'll simulate success
-      setInternalId(`MOCK-${Date.now()}`);
+      setInternalId(`MERC-${Date.now()}`);
       setSuccess(true);
-      setTimeout(() => {
-        resetForm();
-      }, 3000);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle label printing
+  const handlePrintLabel = () => {
+    setShowLabelPreview(true);
+    // In a real implementation, this would generate and send ZPL to printer
+    console.log('Printing label for:', internalId);
   };
 
   // Reset form
@@ -150,13 +175,19 @@ export default function IntakePage() {
     setBookData(null);
     setFormData({
       isbn: '',
-      conditionGrade: '',
+      title: '',
+      author: '',
+      publisher: '',
+      pubYear: null,
+      binding: '',
+      conditionGrade: 'GOOD', // Reset to default GOOD
       conditionNotes: '',
       costCents: 0
     });
     setError('');
     setSuccess(false);
     setInternalId('');
+    setShowLabelPreview(false);
     if (isbnInputRef.current) {
       isbnInputRef.current.focus();
     }
@@ -196,10 +227,33 @@ export default function IntakePage() {
             <p className="text-green-700 mb-4">
               Internal ID: <span className="font-mono font-bold">{internalId}</span>
             </p>
-            <p className="text-green-600 mb-6">
-              A barcode label has been generated. Print it and attach to the book.
-            </p>
+            
+            {/* Label Preview */}
+            {showLabelPreview && (
+              <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 mb-6 max-w-md mx-auto">
+                <h3 className="font-bold text-gray-900 mb-4">Label Preview</h3>
+                <div className="text-left space-y-2">
+                  <div className="text-2xl font-bold font-mono">{internalId}</div>
+                  <div className="border border-gray-400 h-12 bg-black bg-opacity-10 flex items-center justify-center">
+                    <span className="text-xs text-gray-600">||||| |||| ||||| ||||</span>
+                  </div>
+                  <div className="text-sm text-gray-600">{new Date().toLocaleDateString()}</div>
+                  <div className="text-lg font-bold">MERCANIA</div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
+              {!showLabelPreview && (
+                <button
+                  onClick={handlePrintLabel}
+                  className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  <Printer className="h-5 w-5 inline mr-2" />
+                  Print Barcode Label
+                </button>
+              )}
+              
               <button
                 onClick={resetForm}
                 className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-medium"
@@ -207,9 +261,10 @@ export default function IntakePage() {
                 <Plus className="h-5 w-5 inline mr-2" />
                 Add Another Item
               </button>
+              
               <Link
                 href="/putaway"
-                className="block w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium text-center"
+                className="block w-full bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 font-medium text-center"
               >
                 <Package className="h-5 w-5 inline mr-2" />
                 Go to Putaway
@@ -235,7 +290,7 @@ export default function IntakePage() {
               <h1 className="text-2xl font-bold text-gray-900">Item Intake</h1>
             </div>
             <div className="text-sm text-gray-500">
-              Step 1: Scan → Assess → Confirm
+              Step 1: Scan → Edit → Assess → Confirm
             </div>
           </div>
         </div>
@@ -289,39 +344,104 @@ export default function IntakePage() {
           )}
         </div>
 
-        {/* Book Information Display */}
+        {/* Editable Book Information */}
         {bookData && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Book Information</h2>
+            <div className="flex items-center mb-4">
+              <Edit3 className="h-6 w-6 text-blue-600 mr-3" />
+              <h2 className="text-xl font-semibold text-gray-900">Book Information (Editable)</h2>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-2">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Title</label>
-                    <p className="text-lg font-semibold text-gray-900">{bookData.title}</p>
+                    <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                      Title *
+                    </label>
+                    <input
+                      type="text"
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
                   </div>
+                  
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Author</label>
-                      <p className="text-gray-900">{bookData.author}</p>
+                      <label htmlFor="author" className="block text-sm font-medium text-gray-700 mb-2">
+                        Author
+                      </label>
+                      <input
+                        type="text"
+                        id="author"
+                        value={formData.author}
+                        onChange={(e) => setFormData(prev => ({ ...prev, author: e.target.value }))}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Publisher</label>
-                      <p className="text-gray-900">{bookData.publisher}</p>
+                      <label htmlFor="publisher" className="block text-sm font-medium text-gray-700 mb-2">
+                        Publisher
+                      </label>
+                      <input
+                        type="text"
+                        id="publisher"
+                        value={formData.publisher}
+                        onChange={(e) => setFormData(prev => ({ ...prev, publisher: e.target.value }))}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
                     </div>
                   </div>
+                  
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Year</label>
-                      <p className="text-gray-900">{bookData.pubYear || 'Unknown'}</p>
+                      <label htmlFor="pubYear" className="block text-sm font-medium text-gray-700 mb-2">
+                        Year
+                      </label>
+                      <input
+                        type="number"
+                        id="pubYear"
+                        value={formData.pubYear || ''}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          pubYear: e.target.value ? parseInt(e.target.value) : null 
+                        }))}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        min="1000"
+                        max="2100"
+                      />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Binding</label>
-                      <p className="text-gray-900">{bookData.binding}</p>
+                      <label htmlFor="binding" className="block text-sm font-medium text-gray-700 mb-2">
+                        Binding
+                      </label>
+                      <select
+                        id="binding"
+                        value={formData.binding}
+                        onChange={(e) => setFormData(prev => ({ ...prev, binding: e.target.value }))}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select...</option>
+                        <option value="Paperback">Paperback</option>
+                        <option value="Hardcover">Hardcover</option>
+                        <option value="Mass Market">Mass Market</option>
+                        <option value="Trade Paperback">Trade Paperback</option>
+                        <option value="Board Book">Board Book</option>
+                      </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">ISBN</label>
-                      <p className="text-gray-900 font-mono">{bookData.isbn}</p>
+                      <label htmlFor="isbnDisplay" className="block text-sm font-medium text-gray-700 mb-2">
+                        ISBN
+                      </label>
+                      <input
+                        type="text"
+                        id="isbnDisplay"
+                        value={formData.isbn}
+                        readOnly
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 font-mono text-gray-600"
+                      />
                     </div>
                   </div>
                 </div>
@@ -347,7 +467,7 @@ export default function IntakePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="condition" className="block text-sm font-medium text-gray-700 mb-2">
-                  Condition Grade *
+                  Condition Grade * (Default: Good)
                 </label>
                 <select
                   id="condition"
@@ -356,7 +476,6 @@ export default function IntakePage() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 >
-                  <option value="">Select condition...</option>
                   <option value="NEW">New</option>
                   <option value="LIKE_NEW">Like New</option>
                   <option value="VERY_GOOD">Very Good</option>
@@ -413,7 +532,7 @@ export default function IntakePage() {
               </button>
               <button
                 type="submit"
-                disabled={isLoading || !formData.conditionGrade}
+                disabled={isLoading || !formData.conditionGrade || !formData.title}
                 className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
               >
                 {isLoading ? 'Adding Item...' : 'Confirm & Add to Inventory'}
@@ -436,17 +555,17 @@ export default function IntakePage() {
             <div>
               <h4 className="font-medium text-blue-800">Condition Guidelines:</h4>
               <ul className="text-blue-700 mt-1 space-y-1">
-                <li>• New: Unread, pristine</li>
+                <li>• Good: Default condition</li>
                 <li>• Like New: Minimal wear</li>
-                <li>• Good: Normal wear</li>
+                <li>• Acceptable: Heavy wear</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-medium text-blue-800">Next Steps:</h4>
+              <h4 className="font-medium text-blue-800">Process:</h4>
               <ul className="text-blue-700 mt-1 space-y-1">
-                <li>• Print barcode label</li>
-                <li>• Attach to book</li>
-                <li>• Place in intake area</li>
+                <li>• 1. Scan ISBN</li>
+                <li>• 2. Edit if needed</li>
+                <li>• 3. Confirm & print label</li>
               </ul>
             </div>
           </div>
