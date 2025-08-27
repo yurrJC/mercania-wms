@@ -70,14 +70,14 @@ export default function Dashboard() {
               <BarChart3 className="h-4 w-4 mr-2" />
               Dashboard
             </Link>
-            <Link href="/test" className="flex items-center px-3 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent">
+            <Link href="/intake" className="flex items-center px-3 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent">
               <Plus className="h-4 w-4 mr-2" />
+              Intake
+            </Link>
+            <Link href="/test" className="flex items-center px-3 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent">
+              <Package className="h-4 w-4 mr-2" />
               Test Page
             </Link>
-            <div className="flex items-center px-3 py-4 text-sm font-medium text-gray-400 border-b-2 border-transparent">
-              <Package className="h-4 w-4 mr-2" />
-              Intake (Coming Soon)
-            </div>
             <div className="flex items-center px-3 py-4 text-sm font-medium text-gray-400 border-b-2 border-transparent">
               <Tag className="h-4 w-4 mr-2" />
               Putaway (Coming Soon)
@@ -168,20 +168,24 @@ export default function Dashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">System Status</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
             <div className="space-y-3">
-              <div className="flex items-center p-3 text-sm font-medium text-green-700 bg-green-50 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                Frontend Dashboard: Running
+              <Link href="/intake" className="flex items-center p-3 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <Plus className="h-4 w-4 mr-3 text-blue-600" />
+                Start Item Intake
+              </Link>
+              <div className="flex items-center p-3 text-sm font-medium text-gray-400 bg-gray-50 rounded-lg">
+                <Package className="h-4 w-4 mr-3 text-gray-400" />
+                Assign Location (Coming Soon)
               </div>
-              <div className="flex items-center p-3 text-sm font-medium text-yellow-700 bg-yellow-50 rounded-lg">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>
-                Backend API: Starting...
+              <div className="flex items-center p-3 text-sm font-medium text-gray-400 bg-gray-50 rounded-lg">
+                <Tag className="h-4 w-4 mr-3 text-gray-400" />
+                Create Listing (Coming Soon)
               </div>
-              <div className="flex items-center p-3 text-sm font-medium text-green-700 bg-green-50 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                Database: Connected
-              </div>
+              <Link href="/test" className="flex items-center p-3 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <BarChart3 className="h-4 w-4 mr-3 text-blue-600" />
+                View Test Page
+              </Link>
             </div>
           </div>
         </div>
@@ -191,8 +195,12 @@ export default function Dashboard() {
           <h3 className="text-lg font-medium text-gray-900 mb-4">🚀 Next Steps</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 border border-gray-200 rounded-lg">
-              <h4 className="font-medium text-gray-900 mb-2">1. Start API Server</h4>
-              <p className="text-sm text-gray-600">Launch the backend API to enable full functionality</p>
+              <h4 className="font-medium text-gray-900 mb-2">1. Try Item Intake</h4>
+              <p className="text-sm text-gray-600">
+                <Link href="/intake" className="text-blue-600 hover:text-blue-700">
+                  Start the intake process →
+                </Link>
+              </p>
             </div>
             <div className="p-4 border border-gray-200 rounded-lg">
               <h4 className="font-medium text-gray-900 mb-2">2. Test Workflows</h4>
