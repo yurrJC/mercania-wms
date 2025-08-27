@@ -27,9 +27,13 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/intake', require('./routes/intake'));
-app.use('/api/items', require('./routes/items'));
-app.use('/api/reports', require('./routes/reports'));
+import intakeRoutes from './routes/intake.js';
+import itemsRoutes from './routes/items.js';
+import reportsRoutes from './routes/reports.js';
+
+app.use('/api/intake', intakeRoutes);
+app.use('/api/items', itemsRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

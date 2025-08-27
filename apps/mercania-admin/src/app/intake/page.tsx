@@ -79,43 +79,53 @@ export default function IntakePage() {
     setError('');
     
     try {
-      // For now, we'll use mock data that matches your API structure
-      // This will be replaced with actual API call to /api/intake/:isbn
-      const mockBookData: BookData = {
-        isbn: isbn,
-        title: isbn === '9780140283334' ? 'The Great Gatsby' : 
-               isbn === '9780061120084' ? 'To Kill a Mockingbird' : 
-               `Book with ISBN ${isbn}`,
-        author: isbn === '9780140283334' ? 'F. Scott Fitzgerald' : 
-                isbn === '9780061120084' ? 'Harper Lee' : 
-                'Unknown Author',
-        publisher: isbn === '9780140283334' ? 'Penguin Books' : 
-                   isbn === '9780061120084' ? 'Harper Perennial' : 
-                   'Unknown Publisher',
-        pubYear: isbn === '9780140283334' ? 1998 : 
-                 isbn === '9780061120084' ? 2006 : 
-                 null,
-        binding: 'Paperback',
-        imageUrl: null,
-        categories: ['Fiction']
-      };
-
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call the real API endpoint for ISBN lookup
+      const response = await fetch(`/api/intake/${isbn}`);
       
-      setBookData(mockBookData);
+      if (!response.ok) {
+        throw new Error('Failed to fetch book data');
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch book data');
+      }
+      
+      const bookData = result.data;
+      const source = result.source || 'unknown';
+      
+      // Show source indicator
+      if (source === 'mock') {
+        console.log('📖 Using mock data (ISBNdb API key not configured)');
+      } else if (source === 'isbndb') {
+        console.log('🌐 Retrieved from ISBNdb API');
+      }
+      
+      setBookData({
+        isbn: isbn,
+        title: bookData.title,
+        author: bookData.author,
+        publisher: bookData.publisher,
+        pubYear: bookData.pubYear,
+        binding: bookData.binding,
+        imageUrl: bookData.imageUrl,
+        categories: bookData.categories || []
+      });
+      
       setFormData(prev => ({ 
         ...prev, 
         isbn,
-        title: mockBookData.title,
-        author: mockBookData.author,
-        publisher: mockBookData.publisher,
-        pubYear: mockBookData.pubYear,
-        binding: mockBookData.binding
+        title: bookData.title,
+        author: bookData.author,
+        publisher: bookData.publisher,
+        pubYear: bookData.pubYear,
+        binding: bookData.binding
       }));
       
     } catch (err) {
-      setError('Failed to fetch book data. Please try again.');
+      console.error('ISBN lookup error:', err);
+      setError('Failed to fetch book data. Please check the ISBN and try again.');
     } finally {
       setIsLoading(false);
     }

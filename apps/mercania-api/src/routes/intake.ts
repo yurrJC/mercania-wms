@@ -12,10 +12,102 @@ const IntakeSchema = z.object({
   costCents: z.number().int().min(0).default(0)
 });
 
-// Mock ISBN lookup function (replace with real API)
+// Interface for ISBNdb API response
+interface ISBNdbResponse {
+  book?: {
+    title?: string;
+    authors?: string[];
+    publisher?: string;
+    date_published?: string;
+    binding?: string;
+    pages?: number;
+    language?: string;
+    synopsis?: string;
+    subjects?: string[];
+    isbn?: string;
+    isbn13?: string;
+    image?: string;
+  };
+}
+
+// ISBNdb API lookup function
 async function lookupIsbn(isbn: string) {
-  // This would typically call Google Books API, OpenLibrary, etc.
-  // For now, return mock data
+  const API_KEY = process.env.ISBNDB_API_KEY;
+  
+  if (!API_KEY) {
+    console.warn('ISBNdb API key not configured, using mock data');
+    return getMockBookData(isbn);
+  }
+
+  try {
+    console.log(`Looking up ISBN ${isbn} with ISBNdb...`);
+    
+    const response = await fetch(`https://api2.isbndb.com/book/${isbn}`, {
+      headers: {
+        'Authorization': API_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log(`ISBN ${isbn} not found in ISBNdb`);
+        return getUnknownBookData(isbn);
+      }
+      throw new Error(`ISBNdb API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: ISBNdbResponse = await response.json();
+    
+    if (!data.book) {
+      console.log(`No book data returned for ISBN ${isbn}`);
+      return getUnknownBookData(isbn);
+    }
+
+    const book = data.book;
+    
+    // Parse publication year from date
+    let pubYear = null;
+    if (book.date_published) {
+      const yearMatch = book.date_published.match(/\d{4}/);
+      if (yearMatch) {
+        pubYear = parseInt(yearMatch[0]);
+      }
+    }
+
+    // Parse binding
+    const binding = book.binding || 'Unknown';
+
+    // Format authors
+    const author = book.authors && book.authors.length > 0 
+      ? book.authors.join(', ') 
+      : 'Unknown Author';
+
+    // Format categories from subjects
+    const categories = book.subjects || [];
+
+    const result = {
+      title: book.title || `Unknown Book (ISBN: ${isbn})`,
+      author,
+      publisher: book.publisher || 'Unknown Publisher',
+      pubYear,
+      binding,
+      imageUrl: book.image || null,
+      categories
+    };
+
+    console.log(`Successfully retrieved data for: ${result.title}`);
+    return result;
+
+  } catch (error) {
+    console.error('ISBNdb lookup error:', error);
+    console.log('Falling back to mock data...');
+    return getMockBookData(isbn);
+  }
+}
+
+// Mock data fallback for development/testing
+function getMockBookData(isbn: string) {
   const mockBooks: Record<string, any> = {
     '9780140283334': {
       title: 'The Great Gatsby',
@@ -23,8 +115,8 @@ async function lookupIsbn(isbn: string) {
       publisher: 'Penguin Books',
       pubYear: 1998,
       binding: 'Paperback',
-      imageUrl: 'https://example.com/gatsby.jpg',
-      categories: ['Fiction', 'Classic']
+      imageUrl: null,
+      categories: ['Fiction', 'Classic Literature']
     },
     '9780061120084': {
       title: 'To Kill a Mockingbird',
@@ -32,12 +124,26 @@ async function lookupIsbn(isbn: string) {
       publisher: 'Harper Perennial',
       pubYear: 2006,
       binding: 'Paperback',
-      imageUrl: 'https://example.com/mockingbird.jpg',
-      categories: ['Fiction', 'Classic']
+      imageUrl: null,
+      categories: ['Fiction', 'Classic Literature']
+    },
+    '9780451524935': {
+      title: '1984',
+      author: 'George Orwell',
+      publisher: 'Signet Classic',
+      pubYear: 1977,
+      binding: 'Paperback',
+      imageUrl: null,
+      categories: ['Fiction', 'Dystopian', 'Classic Literature']
     }
   };
 
-  return mockBooks[isbn] || {
+  return mockBooks[isbn] || getUnknownBookData(isbn);
+}
+
+// Fallback for unknown books
+function getUnknownBookData(isbn: string) {
+  return {
     title: `Unknown Book (ISBN: ${isbn})`,
     author: 'Unknown Author',
     publisher: 'Unknown Publisher',
@@ -133,24 +239,28 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /intake/:isbn - Get ISBN metadata
+// GET /intake/:isbn - Get ISBN metadata (for frontend preview)
 router.get('/:isbn', async (req, res) => {
   try {
     const { isbn } = req.params;
     
-    if (!/^\d{13}$/.test(isbn)) {
+    if (!/^\d{10,13}$/.test(isbn)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid ISBN format'
+        error: 'Invalid ISBN format (must be 10 or 13 digits)'
       });
     }
 
+    // Pad to 13 digits if needed
+    const isbn13 = isbn.length === 10 ? `978${isbn}` : isbn;
+
     // Lookup ISBN metadata
-    const bookData = await lookupIsbn(isbn);
+    const bookData = await lookupIsbn(isbn13);
     
     res.json({
       success: true,
-      data: bookData
+      data: bookData,
+      source: process.env.ISBNDB_API_KEY ? 'isbndb' : 'mock'
     });
 
   } catch (error) {
@@ -162,4 +272,4 @@ router.get('/:isbn', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
