@@ -4,48 +4,48 @@ import { prisma } from '../index';
 
 const router = Router();
 
-// GET /lots - Get all lots summary
+// GET /lots - Get all lots summary (optimized for scale)
 router.get('/', async (req, res) => {
   try {
-    // Get all items grouped by lot number
-    const itemsWithLots = await prisma.item.findMany({
+    // Add caching headers since lot data changes less frequently
+    res.set('Cache-Control', 'public, max-age=60'); // 1 minute cache
+    // Use Prisma aggregation for efficient lot counting
+    const lotAggregates = await prisma.item.groupBy({
+      by: ['lotNumber'],
       where: {
         lotNumber: { not: null }
       },
-      include: { isbnMaster: true },
+      _count: { id: true },
+      _min: { createdAt: true },
       orderBy: { lotNumber: 'desc' }
     });
 
-    // Group by lot number and create summaries
-    const lotMap = new Map();
-    
-    itemsWithLots.forEach(item => {
-      const lotNum = item.lotNumber!;
-      if (!lotMap.has(lotNum)) {
-        lotMap.set(lotNum, {
-          lotNumber: lotNum,
-          itemCount: 0,
-          createdAt: item.createdAt,
-          sampleTitles: []
+    // Get sample titles for each lot (limit to first 3 unique titles)
+    const lotSummaries = await Promise.all(
+      lotAggregates.map(async (aggregate) => {
+        const sampleItems = await prisma.item.findMany({
+          where: { lotNumber: aggregate.lotNumber },
+          include: { isbnMaster: { select: { title: true } } },
+          take: 10, // Get more items to ensure we get 3 unique titles
+          orderBy: { id: 'asc' }
         });
-      }
-      
-      const lot = lotMap.get(lotNum);
-      lot.itemCount++;
-      
-      // Add unique titles (up to 3)
-      const title = item.isbnMaster?.title || 'Unknown Title';
-      if (!lot.sampleTitles.includes(title) && lot.sampleTitles.length < 3) {
-        lot.sampleTitles.push(title);
-      }
-      
-      // Keep the earliest creation date
-      if (item.createdAt < lot.createdAt) {
-        lot.createdAt = item.createdAt;
-      }
-    });
 
-    const lotSummaries = Array.from(lotMap.values()).sort((a, b) => b.lotNumber - a.lotNumber);
+        // Extract unique titles (up to 3)
+        const uniqueTitles = new Set<string>();
+        for (const item of sampleItems) {
+          const title = item.isbnMaster?.title || 'Unknown Title';
+          uniqueTitles.add(title);
+          if (uniqueTitles.size >= 3) break;
+        }
+
+        return {
+          lotNumber: aggregate.lotNumber!,
+          itemCount: aggregate._count.id,
+          createdAt: aggregate._min.createdAt!,
+          sampleTitles: Array.from(uniqueTitles)
+        };
+      })
+    );
 
     res.json({
       success: true,

@@ -40,6 +40,8 @@ interface Item {
     binding: string;
     imageUrl: string | null;
   } | null;
+  statusHistory?: any[];
+  listings?: any[];
 }
 
 interface InventoryData {
@@ -274,8 +276,21 @@ export default function InventoryPage() {
         setShowLotModal(false);
         setLotSearchTerm('');
         
-        // Refresh inventory to show updated items
-        fetchInventory(currentPage, statusFilter, searchTerm);
+        // Update specific items in inventory to show new lot number
+        setInventoryData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.map(item => 
+              itemIds.includes(item.id) 
+                ? { ...item, lotNumber: lotNumber }
+                : item
+            )
+          };
+        });
+        
+        // Refresh lots list to include the new lot
+        fetchAllLots();
       } else {
         setError(result.error || 'Failed to create lot');
       }
@@ -307,6 +322,14 @@ export default function InventoryPage() {
     }
   };
 
+  // Open manage lots modal and refresh data
+  const openManageLotsModal = async () => {
+    setShowManageLotsModal(true);
+    await fetchAllLots();
+    // Also refresh inventory to ensure consistency
+    await fetchInventory(currentPage, statusFilter, searchTerm);
+  };
+
   // Delete entire lot
   const handleDeleteLot = async (lotNumber: number) => {
     try {
@@ -314,14 +337,33 @@ export default function InventoryPage() {
         method: 'DELETE',
       });
 
+      if (!response.ok) {
+        const errorResult = await response.json();
+        setError(errorResult.error || `Failed to delete lot (${response.status})`);
+        return;
+      }
+
       const result = await response.json();
 
       if (result.success) {
-        // Remove lot from the list
+        // 1. Remove lot from the list
         setAllLots(prev => prev.filter(lot => lot.lotNumber !== lotNumber));
         
-        // Refresh inventory to show updated items
-        await fetchInventory(currentPage, statusFilter, searchTerm);
+        // 2. Update all visible inventory items that were in this lot
+        setInventoryData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.map(item => 
+              item.lotNumber === lotNumber 
+                ? { ...item, lotNumber: null }
+                : item
+            )
+          };
+        });
+        
+        // 3. For items not visible on current page, they'll be updated when/if they're loaded
+        // No need to refresh entire inventory - lot column will show correctly when items appear
       } else {
         setError(result.error || 'Failed to delete lot');
       }
@@ -334,6 +376,12 @@ export default function InventoryPage() {
   // Remove item from existing lot
   const handleRemoveItemFromLot = async (itemId: number, lotNumber: number) => {
     try {
+      // Prevent double-clicks by checking if item still exists in the editing lot
+      if (editingLot && !editingLot.items.some((item: Item) => item.id === itemId)) {
+        setError('Item has already been removed from this lot');
+        return;
+      }
+      
       const response = await fetch(`/api/lots/${lotNumber}/remove`, {
         method: 'POST',
         headers: {
@@ -341,6 +389,12 @@ export default function InventoryPage() {
         },
         body: JSON.stringify({ itemId }),
       });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        setError(errorResult.error || `Failed to remove item from lot (${response.status})`);
+        return;
+      }
 
       const result = await response.json();
 
@@ -360,11 +414,49 @@ export default function InventoryPage() {
           }
         }
         
-        // Refresh lots list
+        // 1. Update the specific item in inventory immediately (if visible)
+        setInventoryData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.map(item => 
+              item.id === itemId 
+                ? { ...item, lotNumber: null }
+                : item
+            )
+          };
+        });
+        
+        // 2. Refresh lots list for accurate counts
         await fetchAllLots();
         
-        // Refresh inventory to show updated lot status
-        await fetchInventory(currentPage, statusFilter, searchTerm);
+        // 3. If item not visible on current page, fetch its updated data specifically
+        const isItemVisible = inventoryData?.items.some(item => item.id === itemId) || false;
+        if (!isItemVisible) {
+          // Fetch the specific item's updated data
+          try {
+            const response = await fetch(`/api/items/${itemId}`);
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success) {
+                // Update this specific item if it appears in inventory later
+                setInventoryData(prev => {
+                  if (!prev) return prev;
+                  return {
+                    ...prev,
+                    items: prev.items.map(item => 
+                      item.id === itemId 
+                        ? { ...item, lotNumber: result.data.lotNumber }
+                        : item
+                    )
+                  };
+                });
+              }
+            }
+          } catch (err) {
+            console.log('Item-specific update failed, item not on current page');
+          }
+        }
       } else {
         setError(result.error || 'Failed to remove item from lot');
       }
@@ -414,10 +506,7 @@ export default function InventoryPage() {
                 Create Lot
               </button>
               <button
-                onClick={() => {
-                  setShowManageLotsModal(true);
-                  fetchAllLots();
-                }}
+                onClick={openManageLotsModal}
                 className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 font-medium"
               >
                 <Settings className="h-4 w-4 inline mr-2" />

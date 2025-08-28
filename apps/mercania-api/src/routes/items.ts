@@ -310,8 +310,11 @@ router.get('/', async (req, res) => {
   try {
     const { status, location, isbn, search, page = '1', limit = '50' } = req.query;
     
+    // Add caching headers for better performance
+    res.set('Cache-Control', 'public, max-age=30'); // 30 second cache
+    
     const pageNum = parseInt(page as string) || 1;
-    const limitNum = parseInt(limit as string) || 50;
+    const limitNum = Math.min(parseInt(limit as string) || 50, 100); // Max 100 items per page
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};

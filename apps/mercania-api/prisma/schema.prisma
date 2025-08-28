@@ -63,6 +63,13 @@ model Item {
   listings          Listing[]
   orderLines        OrderLine[]
 
+  // Performance indexes for scale
+  @@index([lotNumber])           // Fast lot queries
+  @@index([isbn])                // Fast ISBN searches  
+  @@index([currentStatus])       // Fast status filtering
+  @@index([currentLocation])     // Fast location filtering
+  @@index([currentStatus, currentLocation]) // Combined filters
+  @@index([createdAt])           // Fast ordering by creation date
   @@map("items")
 }
 
