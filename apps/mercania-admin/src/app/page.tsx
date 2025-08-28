@@ -78,10 +78,10 @@ export default function Dashboard() {
               <Package className="h-4 w-4 mr-2" />
               Inventory
             </Link>
-            <div className="flex items-center px-3 py-4 text-sm font-medium text-gray-400 border-b-2 border-transparent">
+            <Link href="/putaway" className="flex items-center px-3 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent">
               <Tag className="h-4 w-4 mr-2" />
-              Putaway (Coming Soon)
-            </div>
+              Putaway
+            </Link>
           </div>
         </div>
       </nav>

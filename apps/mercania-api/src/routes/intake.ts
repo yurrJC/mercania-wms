@@ -1,15 +1,30 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../index';
+import dvdRoutes from './dvd';
 
 const router = Router();
 
+// Mount DVD routes
+router.use('/dvd', dvdRoutes);
+
 // Validation schemas
 const IntakeSchema = z.object({
-  isbn: z.string().length(13).regex(/^\d+$/),
+  isbn: z.string().min(8).max(14).regex(/^\d+$/), // Support both ISBN and UPC
+  title: z.string().optional(),
+  author: z.string().optional(), // For DVDs, this will be the director
+  publisher: z.string().optional(), // For DVDs, this will be the studio
+  pubYear: z.number().optional(), // Release year
+  binding: z.string().optional(), // For DVDs, this will be the format
   conditionGrade: z.string().optional(),
   conditionNotes: z.string().optional(),
-  costCents: z.number().int().min(0).default(0)
+  costCents: z.number().int().min(0).default(0),
+  productType: z.string().optional(), // 'BOOK' or 'DVD'
+  dvdMetadata: z.object({
+    genre: z.string().optional(),
+    rating: z.string().optional(),
+    runtime: z.number().optional()
+  }).optional()
 });
 
 // Interface for ISBNdb API response
@@ -154,50 +169,76 @@ function getUnknownBookData(isbn: string) {
   };
 }
 
-// POST /intake - Create new item from ISBN
+// POST /intake - Create new item from ISBN or UPC
 router.post('/', async (req, res) => {
   try {
     // Validate input
     const validatedData = IntakeSchema.parse(req.body);
     
-    // Lookup ISBN metadata
-    const bookData = await lookupIsbn(validatedData.isbn);
+    const productType = validatedData.productType || 'BOOK';
+    const identifier = validatedData.isbn; // This could be ISBN or UPC
     
-    // Check for existing items with this ISBN (regardless of status)
+    let itemData;
+    
+    if (productType === 'DVD') {
+      // For DVDs, use the provided form data instead of API lookup
+      // since the lookup already happened on the frontend
+      itemData = {
+        title: validatedData.title || 'Unknown DVD',
+        author: validatedData.author || 'Unknown Director',
+        publisher: validatedData.publisher || 'Unknown Studio',
+        pubYear: validatedData.pubYear || null,
+        binding: validatedData.binding || 'DVD',
+        imageUrl: null,
+        categories: validatedData.dvdMetadata?.genre ? [validatedData.dvdMetadata.genre] : []
+      };
+    } else {
+      // For books, lookup ISBN metadata as before
+      itemData = await lookupIsbn(identifier);
+      
+      // Override with any provided data (for manual entries)
+      if (validatedData.title) itemData.title = validatedData.title;
+      if (validatedData.author) itemData.author = validatedData.author;
+      if (validatedData.publisher) itemData.publisher = validatedData.publisher;
+      if (validatedData.pubYear) itemData.pubYear = validatedData.pubYear;
+      if (validatedData.binding) itemData.binding = validatedData.binding;
+    }
+    
+    // Check for existing items with this identifier (regardless of status)
     const existingItems = await prisma.item.findMany({
-      where: { isbn: validatedData.isbn },
+      where: { isbn: identifier },
       include: { isbnMaster: true },
       orderBy: { createdAt: 'desc' }
     });
 
-    // Create or update ISBN master record
+    // Create or update ISBN/UPC master record
     const isbnMaster = await prisma.isbnMaster.upsert({
-      where: { isbn: validatedData.isbn },
+      where: { isbn: identifier },
       update: {
-        title: bookData.title,
-        author: bookData.author,
-        publisher: bookData.publisher,
-        pubYear: bookData.pubYear,
-        binding: bookData.binding,
-        imageUrl: bookData.imageUrl,
-        categories: bookData.categories
+        title: itemData.title,
+        author: itemData.author,
+        publisher: itemData.publisher,
+        pubYear: itemData.pubYear,
+        binding: itemData.binding,
+        imageUrl: itemData.imageUrl,
+        categories: itemData.categories
       },
       create: {
-        isbn: validatedData.isbn,
-        title: bookData.title,
-        author: bookData.author,
-        publisher: bookData.publisher,
-        pubYear: bookData.pubYear,
-        binding: bookData.binding,
-        imageUrl: bookData.imageUrl,
-        categories: bookData.categories
+        isbn: identifier,
+        title: itemData.title,
+        author: itemData.author,
+        publisher: itemData.publisher,
+        pubYear: itemData.pubYear,
+        binding: itemData.binding,
+        imageUrl: itemData.imageUrl,
+        categories: itemData.categories
       }
     });
 
     // Create new item (PostgreSQL auto-generates sequential ID)
     const item = await prisma.item.create({
       data: {
-        isbn: validatedData.isbn,
+        isbn: identifier,
         conditionGrade: validatedData.conditionGrade,
         conditionNotes: validatedData.conditionNotes,
         costCents: validatedData.costCents,

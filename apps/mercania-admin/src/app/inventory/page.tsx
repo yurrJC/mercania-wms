@@ -60,6 +60,8 @@ export default function InventoryPage() {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [lotFilter, setLotFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState(''); // '' = default (lot first), 'id_asc' = ID low to high, 'id_desc' = ID high to low
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Item | null>(null);
@@ -77,7 +79,7 @@ export default function InventoryPage() {
   const [createdLot, setCreatedLot] = useState<any>(null);
 
   // Fetch inventory data
-  const fetchInventory = async (page = 1, status = '', search = '') => {
+  const fetchInventory = async (page = 1, status = '', search = '', lotNumber = '', sort = '') => {
     setIsLoading(true);
     setError('');
     
@@ -86,6 +88,8 @@ export default function InventoryPage() {
       params.append('page', page.toString());
       params.append('limit', '20');
       if (status) params.append('status', status);
+      if (lotNumber) params.append('lotNumber', lotNumber);
+      if (sort) params.append('sort', sort);
       
       // Smart search: determine if it's an ID or ISBN
       if (search) {
@@ -125,19 +129,34 @@ export default function InventoryPage() {
 
   // Load data on mount and when filters change
   useEffect(() => {
-    fetchInventory(currentPage, statusFilter, searchTerm);
-  }, [currentPage, statusFilter, searchTerm]);
+    fetchInventory(currentPage, statusFilter, searchTerm, lotFilter, sortOrder);
+  }, [currentPage, statusFilter, searchTerm, lotFilter, sortOrder]);
 
   // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
-    fetchInventory(1, statusFilter, searchTerm);
+    fetchInventory(1, statusFilter, searchTerm, lotFilter, sortOrder);
   };
 
   // Handle status filter change
   const handleStatusFilter = (status: string) => {
     setStatusFilter(status);
+    setCurrentPage(1);
+  };
+
+  // Handle lot filter change
+  const handleLotFilter = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrentPage(1);
+  };
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('');
+    setLotFilter('');
+    setSortOrder('');
     setCurrentPage(1);
   };
 
@@ -149,6 +168,12 @@ export default function InventoryPage() {
   // Format date
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
+  };
+
+  // Generate SKU in LOCATION-ID format
+  const generateSKU = (item: Item) => {
+    const location = item.currentLocation || 'TBD';
+    return `${location}-${item.id}`;
   };
 
   // Handle item deletion
@@ -293,9 +318,9 @@ export default function InventoryPage() {
           return {
             ...prev,
             items: prev.items.map(item => 
-              itemIds.includes(item.id) 
-                ? { ...item, lotNumber: lotNumber }
-                : item
+          itemIds.includes(item.id) 
+            ? { ...item, lotNumber: lotNumber }
+            : item
             )
           };
         });
@@ -341,7 +366,7 @@ export default function InventoryPage() {
     setShowManageLotsModal(true);
     await fetchAllLots();
     // Also refresh inventory to ensure consistency
-    await fetchInventory(currentPage, statusFilter, searchTerm);
+    await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
   };
 
   // Delete entire lot
@@ -375,7 +400,7 @@ export default function InventoryPage() {
       if (!response.ok) {
         // If deletion failed, revert the optimistic updates
         await fetchAllLots();
-        await fetchInventory(currentPage, statusFilter, searchTerm);
+        await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
         
         const errorResult = await response.json();
         setError(errorResult.error || `Failed to delete lot (${response.status})`);
@@ -387,7 +412,7 @@ export default function InventoryPage() {
       if (!result.success) {
         // If deletion failed, revert the optimistic updates
         await fetchAllLots();
-        await fetchInventory(currentPage, statusFilter, searchTerm);
+        await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
         setError(result.error || 'Failed to delete lot');
       }
       // If successful, the optimistic updates are already applied - no need for additional API calls
@@ -395,7 +420,7 @@ export default function InventoryPage() {
       console.error('Delete lot error:', err);
       // If deletion failed, revert the optimistic updates
       await fetchAllLots();
-      await fetchInventory(currentPage, statusFilter, searchTerm);
+      await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
       setError('Failed to delete lot');
     } finally {
       setIsDeletingLot(null);
@@ -449,9 +474,9 @@ export default function InventoryPage() {
           return {
             ...prev,
             items: prev.items.map(item => 
-              item.id === itemId 
-                ? { ...item, lotNumber: null }
-                : item
+          item.id === itemId 
+            ? { ...item, lotNumber: null }
+            : item
             )
           };
         });
@@ -474,9 +499,9 @@ export default function InventoryPage() {
                   return {
                     ...prev,
                     items: prev.items.map(item => 
-                      item.id === itemId 
-                        ? { ...item, lotNumber: result.data.lotNumber }
-                        : item
+                  item.id === itemId 
+                    ? { ...item, lotNumber: result.data.lotNumber }
+                    : item
                     )
                   };
                 });
@@ -743,7 +768,7 @@ export default function InventoryPage() {
                 Manage Lots
               </button>
               <button
-                onClick={() => fetchInventory(currentPage, statusFilter, searchTerm)}
+                onClick={() => fetchInventory(currentPage, statusFilter, searchTerm, lotFilter)}
                 className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
               >
                 <RefreshCw className="h-4 w-4 inline mr-2" />
@@ -758,10 +783,15 @@ export default function InventoryPage() {
         
         {/* Filters and Search */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4">
+          <div className="space-y-4">
+            {/* Search Row */}
+            <div className="flex flex-col lg:flex-row lg:items-end gap-4">
             
-            {/* Search */}
+              {/* Item Search */}
             <form onSubmit={handleSearch} className="flex-1 max-w-md">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Search Items
+                </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
@@ -773,11 +803,35 @@ export default function InventoryPage() {
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Enter item ID (1-6 digits, e.g., "9") or ISBN (10-13 digits, e.g., "9780812693768")
+                  Enter item ID (1-6 digits) or ISBN (10-13 digits)
+                </p>
+              </form>
+
+              {/* Lot Search */}
+              <form onSubmit={handleLotFilter} className="flex-1 max-w-md">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Search by Lot
+                </label>
+                <div className="relative">
+                  <Package2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-purple-400" />
+                  <input
+                    type="text"
+                    value={lotFilter}
+                    onChange={(e) => setLotFilter(e.target.value)}
+                    placeholder="Enter lot number..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter lot number (e.g., "1", "23", "456")
               </p>
             </form>
 
             {/* Status Filter */}
+              <div className="flex-shrink-0">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Status Filter
+                </label>
             <div className="flex items-center space-x-2">
               <Filter className="h-4 w-4 text-gray-600" />
               <select
@@ -792,6 +846,64 @@ export default function InventoryPage() {
                 <option value="SOLD">Sold</option>
               </select>
             </div>
+              </div>
+
+              {/* Sort Order */}
+              <div className="flex-shrink-0">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sort by ID
+                </label>
+                <div className="flex items-center space-x-2">
+                  <svg className="h-4 w-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Default (Lot first)</option>
+                    <option value="id_asc">ID: Low to High</option>
+                    <option value="id_desc">ID: High to Low</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Filters & Clear Button */}
+            {(searchTerm || statusFilter || lotFilter || sortOrder) && (
+              <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <span className="font-medium">Active filters:</span>
+                  {searchTerm && (
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                      Item: {searchTerm}
+                    </span>
+                  )}
+                  {lotFilter && (
+                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
+                      Lot: #{lotFilter}
+                    </span>
+                  )}
+                  {statusFilter && (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                      Status: {statusFilter}
+                    </span>
+                  )}
+                  {sortOrder && (
+                    <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                      Sort: {sortOrder === 'id_asc' ? 'ID Low→High' : sortOrder === 'id_desc' ? 'ID High→Low' : sortOrder}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleClearFilters}
+                  className="text-sm text-gray-500 hover:text-gray-700 underline"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -816,7 +928,7 @@ export default function InventoryPage() {
             <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No Items Found</h3>
             <p className="text-gray-600 mb-6">
-              {searchTerm || statusFilter 
+              {searchTerm || statusFilter || lotFilter
                 ? "No items match your current filters." 
                 : "Your inventory is empty. Start by adding some items!"
               }
@@ -835,35 +947,38 @@ export default function InventoryPage() {
         {!isLoading && !error && inventoryData && inventoryData.items.length > 0 && (
           <>
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+              <div className="w-full">
+                <table className="w-full table-fixed divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-16 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         ID
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Book Details
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Condition
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        SKU
+                      </th>
+                      <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Location
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-16 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Lot
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Cost
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Intake Date
+                      <th className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-20 px-2 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -871,10 +986,10 @@ export default function InventoryPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {inventoryData.items.map((item) => (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-lg font-bold text-gray-900">#{item.id}</div>
+                        <td className="px-2 py-3 whitespace-nowrap text-center">
+                          <div className="text-sm font-bold text-gray-900">#{item.id}</div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 py-3">
                           <div className="flex items-start space-x-3">
                             <div className="flex-shrink-0">
                               {item.isbnMaster?.imageUrl ? (
@@ -902,55 +1017,48 @@ export default function InventoryPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
+                        <td className="px-2 py-3 whitespace-nowrap">
+                          <div className="text-xs font-medium text-gray-900">
                             {item.conditionGrade || 'Not Set'}
                           </div>
                           {item.conditionNotes && (
-                            <div className="text-xs text-gray-500 truncate max-w-32">
-                              {item.conditionNotes}
+                            <div className="text-xs text-gray-400 truncate" title={item.conditionNotes}>
+                              Notes
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(item.currentStatus)}`}>
-                            {item.currentStatus}
+                        <td className="px-2 py-3 whitespace-nowrap">
+                          <div className="text-xs font-mono font-medium text-gray-900 bg-gray-50 px-1 py-1 rounded text-center">
+                            {generateSKU(item)}
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 whitespace-nowrap text-center">
+                          <span className={`inline-flex px-1 py-1 text-xs font-semibold rounded ${getStatusColor(item.currentStatus)}`}>
+                            {item.currentStatus.slice(0,3)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-2 py-3 whitespace-nowrap text-center text-xs text-gray-900">
                           {item.currentLocation ? (
-                            <div className="flex items-center">
-                              <MapPin className="h-4 w-4 text-gray-400 mr-1" />
-                              {item.currentLocation}
-                            </div>
+                            item.currentLocation
                           ) : (
-                            <span className="text-gray-400">Not assigned</span>
+                            <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-2 py-3 whitespace-nowrap text-center text-xs text-gray-900">
                           {item.lotNumber ? (
-                            <div className="flex items-center">
-                              <Package2 className="h-4 w-4 text-purple-400 mr-1" />
-                              <span className="text-purple-600 font-medium">#{item.lotNumber}</span>
-                            </div>
+                            <span className="bg-purple-100 text-purple-800 px-1 py-1 rounded text-xs font-semibold">#{item.lotNumber}</span>
                           ) : (
-                            <span className="text-gray-400">Individual</span>
+                            <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex items-center">
-                            <DollarSign className="h-4 w-4 text-gray-400 mr-1" />
-                            {formatCurrency(item.costCents)}
-                          </div>
+                        <td className="px-2 py-3 whitespace-nowrap text-center text-xs text-gray-900">
+                          {formatCurrency(item.costCents)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <Calendar className="h-4 w-4 text-gray-400 mr-1" />
-                            {formatDate(item.intakeDate)}
-                          </div>
+                        <td className="px-2 py-3 whitespace-nowrap text-center text-xs text-gray-500">
+                          {formatDate(item.intakeDate)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex items-center justify-end space-x-2">
+                        <td className="px-2 py-3 whitespace-nowrap text-right text-xs font-medium">
+                          <div className="flex items-center justify-end space-x-1">
                             <button
                               onClick={() => handleViewItem(item)}
                               className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
@@ -1111,6 +1219,14 @@ export default function InventoryPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">ISBN</label>
                       <p className="text-gray-900">{selectedItem.isbn}</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                      <p className="text-gray-900 font-mono bg-gray-50 px-2 py-1 rounded border text-sm">
+                        {generateSKU(selectedItem)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Location-ID Format</p>
                     </div>
                     
                     <div>
@@ -1601,8 +1717,8 @@ export default function InventoryPage() {
                                   </>
                                 ) : (
                                   <>
-                                    <Trash2 className="h-4 w-4 inline mr-1" />
-                                    Delete
+                                <Trash2 className="h-4 w-4 inline mr-1" />
+                                Delete
                                   </>
                                 )}
                               </button>

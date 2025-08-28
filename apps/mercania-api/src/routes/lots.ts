@@ -244,9 +244,16 @@ router.delete('/:lotNumber', async (req, res) => {
 
     await Promise.all(statusHistoryPromises);
 
+    // Add cache invalidation headers to force refresh
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('X-Lot-Invalidated', lotNum.toString());
+
     res.json({
       success: true,
-      message: `Lot #${lotNum} ungrouped (${items.length} items)`
+      message: `Lot #${lotNum} ungrouped (${items.length} items)`,
+      invalidatedLot: lotNum
     });
 
   } catch (error) {
