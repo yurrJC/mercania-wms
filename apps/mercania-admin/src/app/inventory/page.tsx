@@ -346,7 +346,7 @@ export default function InventoryPage() {
       const result = await response.json();
 
       if (result.success) {
-        // 1. Remove lot from the list
+        // 1. Remove lot from the list immediately
         setAllLots(prev => prev.filter(lot => lot.lotNumber !== lotNumber));
         
         // 2. Update all visible inventory items that were in this lot
@@ -362,8 +362,11 @@ export default function InventoryPage() {
           };
         });
         
-        // 3. For items not visible on current page, they'll be updated when/if they're loaded
-        // No need to refresh entire inventory - lot column will show correctly when items appear
+        // 3. Force refresh the lots list to ensure UI consistency
+        await fetchAllLots();
+        
+        // 4. Also refresh inventory to ensure full consistency
+        await fetchInventory(currentPage, statusFilter, searchTerm);
       } else {
         setError(result.error || 'Failed to delete lot');
       }
