@@ -163,6 +163,13 @@ router.post('/', async (req, res) => {
     // Lookup ISBN metadata
     const bookData = await lookupIsbn(validatedData.isbn);
     
+    // Check for existing items with this ISBN (regardless of status)
+    const existingItems = await prisma.item.findMany({
+      where: { isbn: validatedData.isbn },
+      include: { isbnMaster: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
     // Create or update ISBN master record
     const isbnMaster = await prisma.isbnMaster.upsert({
       where: { isbn: validatedData.isbn },
@@ -212,9 +219,24 @@ router.post('/', async (req, res) => {
       }
     });
 
+    // Check if this is a duplicate intake
+    const isDuplicate = existingItems.length > 0;
+    const duplicateWarning = isDuplicate ? {
+      isDuplicate: true,
+      message: `⚠️ This book has been previously intaken! Found ${existingItems.length} existing item(s).`,
+      existingItems: existingItems.map(item => ({
+        id: item.id,
+        status: item.currentStatus,
+        intakeDate: item.intakeDate,
+        location: item.currentLocation
+      })),
+      recommendation: 'A new label is needed for this additional copy.'
+    } : { isDuplicate: false };
+
     res.status(201).json({
       success: true,
       message: 'Item created successfully',
+      duplicate: duplicateWarning,
       data: {
         item,
         internalId: item.id, // Return the simple integer ID
