@@ -30,10 +30,12 @@ app.get('/health', (req, res) => {
 import intakeRoutes from './routes/intake.js';
 import itemsRoutes from './routes/items.js';
 import reportsRoutes from './routes/reports.js';
+import lotsRoutes from './routes/lots.js';
 
 app.use('/api/intake', intakeRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/lots', lotsRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

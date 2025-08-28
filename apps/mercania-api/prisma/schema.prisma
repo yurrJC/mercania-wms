@@ -54,6 +54,7 @@ model Item {
   intakeDate      DateTime  @default(now())
   currentStatus   ItemStatus @default(INTAKE)
   currentLocation String?   @db.VarChar(20)
+  lotNumber       Int?      // Items in the same lot share the same lot number
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

@@ -16,7 +16,10 @@ import {
   RefreshCw,
   Trash2,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Package2,
+  Settings,
+  Edit3
 } from 'lucide-react';
 
 interface Item {
@@ -28,6 +31,7 @@ interface Item {
   intakeDate: string;
   currentStatus: string;
   currentLocation: string | null;
+  lotNumber: number | null;
   isbnMaster: {
     title: string;
     author: string;
@@ -58,6 +62,14 @@ export default function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Item | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showLotModal, setShowLotModal] = useState(false);
+  const [lotItems, setLotItems] = useState<Item[]>([]);
+  const [lotSearchTerm, setLotSearchTerm] = useState('');
+  const [isCreatingLot, setIsCreatingLot] = useState(false);
+  const [showManageLotsModal, setShowManageLotsModal] = useState(false);
+  const [allLots, setAllLots] = useState<any[]>([]);
+  const [editingLot, setEditingLot] = useState<any>(null);
+  const [isLoadingLots, setIsLoadingLots] = useState(false);
 
   // Fetch inventory data
   const fetchInventory = async (page = 1, status = '', search = '') => {
@@ -186,6 +198,182 @@ export default function InventoryPage() {
     }
   };
 
+  // Handle lot item scanning
+  const handleLotItemScan = async (searchTerm: string) => {
+    if (!searchTerm.trim()) return;
+
+    try {
+      const trimmedSearch = searchTerm.trim();
+      const isNumeric = /^\d+$/.test(trimmedSearch);
+      
+      let url;
+      if (isNumeric && trimmedSearch.length <= 6) {
+        // It's a short number (ID)
+        url = `/api/items?search=${trimmedSearch}`;
+      } else {
+        // It's an ISBN/barcode
+        url = `/api/items?isbn=${trimmedSearch}`;
+      }
+
+      const response = await fetch(url);
+      const result = await response.json();
+      
+      if (result.success && result.data.items.length > 0) {
+        const item = result.data.items[0]; // Take the first item
+        
+        // Check if item is already in the lot
+        if (!lotItems.find(lotItem => lotItem.id === item.id)) {
+          setLotItems(prev => [...prev, item]);
+          setLotSearchTerm(''); // Clear the search after successful scan
+        } else {
+          setError('Item is already in the lot');
+        }
+      } else {
+        setError('Item not found');
+      }
+    } catch (err) {
+      console.error('Lot scan error:', err);
+      setError('Failed to scan item');
+    }
+  };
+
+  // Remove item from lot
+  const handleRemoveFromLot = (itemId: number) => {
+    setLotItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  // Create lot
+  const handleCreateLot = async () => {
+    if (lotItems.length === 0) {
+      setError('No items in lot to create');
+      return;
+    }
+
+    setIsCreatingLot(true);
+    try {
+      // The lot number will be the first (lowest) internal ID
+      const lotNumber = Math.min(...lotItems.map(item => item.id));
+      const itemIds = lotItems.map(item => item.id);
+
+      const response = await fetch('/api/lots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lotNumber,
+          itemIds
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Clear the lot and close modal
+        setLotItems([]);
+        setShowLotModal(false);
+        setLotSearchTerm('');
+        
+        // Refresh inventory to show updated items
+        fetchInventory(currentPage, statusFilter, searchTerm);
+      } else {
+        setError(result.error || 'Failed to create lot');
+      }
+    } catch (err) {
+      console.error('Create lot error:', err);
+      setError('Failed to create lot');
+    } finally {
+      setIsCreatingLot(false);
+    }
+  };
+
+  // Fetch all lots
+  const fetchAllLots = async () => {
+    setIsLoadingLots(true);
+    try {
+      const response = await fetch('/api/lots');
+      const result = await response.json();
+      
+      if (result.success) {
+        setAllLots(result.data);
+      } else {
+        setError('Failed to load lots');
+      }
+    } catch (err) {
+      console.error('Fetch lots error:', err);
+      setError('Failed to load lots');
+    } finally {
+      setIsLoadingLots(false);
+    }
+  };
+
+  // Delete entire lot
+  const handleDeleteLot = async (lotNumber: number) => {
+    try {
+      const response = await fetch(`/api/lots/${lotNumber}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Remove lot from the list
+        setAllLots(prev => prev.filter(lot => lot.lotNumber !== lotNumber));
+        
+        // Refresh inventory to show updated items
+        await fetchInventory(currentPage, statusFilter, searchTerm);
+      } else {
+        setError(result.error || 'Failed to delete lot');
+      }
+    } catch (err) {
+      console.error('Delete lot error:', err);
+      setError('Failed to delete lot');
+    }
+  };
+
+  // Remove item from existing lot
+  const handleRemoveItemFromLot = async (itemId: number, lotNumber: number) => {
+    try {
+      const response = await fetch(`/api/lots/${lotNumber}/remove`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ itemId }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update the editing lot items
+        if (editingLot && editingLot.lotNumber === lotNumber) {
+          const updatedItems = editingLot.items.filter((item: Item) => item.id !== itemId);
+          
+          if (updatedItems.length === 0) {
+            // If no items left, go back to lots list
+            setEditingLot(null);
+          } else {
+            setEditingLot({
+              ...editingLot,
+              items: updatedItems
+            });
+          }
+        }
+        
+        // Refresh lots list
+        await fetchAllLots();
+        
+        // Refresh inventory to show updated lot status
+        await fetchInventory(currentPage, statusFilter, searchTerm);
+      } else {
+        setError(result.error || 'Failed to remove item from lot');
+      }
+    } catch (err) {
+      console.error('Remove item from lot error:', err);
+      setError('Failed to remove item from lot');
+    }
+  };
+
   // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -218,6 +406,23 @@ export default function InventoryPage() {
                 <Plus className="h-4 w-4 inline mr-2" />
                 Add New Item
               </Link>
+              <button
+                onClick={() => setShowLotModal(true)}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-medium"
+              >
+                <Package2 className="h-4 w-4 inline mr-2" />
+                Create Lot
+              </button>
+              <button
+                onClick={() => {
+                  setShowManageLotsModal(true);
+                  fetchAllLots();
+                }}
+                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 font-medium"
+              >
+                <Settings className="h-4 w-4 inline mr-2" />
+                Manage Lots
+              </button>
               <button
                 onClick={() => fetchInventory(currentPage, statusFilter, searchTerm)}
                 className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
@@ -331,6 +536,9 @@ export default function InventoryPage() {
                         Location
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Lot
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Cost
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -398,6 +606,16 @@ export default function InventoryPage() {
                             </div>
                           ) : (
                             <span className="text-gray-400">Not assigned</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {item.lotNumber ? (
+                            <div className="flex items-center">
+                              <Package2 className="h-4 w-4 text-purple-400 mr-1" />
+                              <span className="text-purple-600 font-medium">#{item.lotNumber}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Individual</span>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -695,6 +913,336 @@ export default function InventoryPage() {
                     )}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lot Creation Modal */}
+        {showLotModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto">
+              <div className="flex justify-between items-center p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">Create Item Lot</h2>
+                <button
+                  onClick={() => {
+                    setShowLotModal(false);
+                    setLotItems([]);
+                    setLotSearchTerm('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Scanning Section */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900">Scan Items</h3>
+                    
+                    <div className="space-y-3">
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        handleLotItemScan(lotSearchTerm);
+                      }}>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                          <input
+                            type="text"
+                            value={lotSearchTerm}
+                            onChange={(e) => setLotSearchTerm(e.target.value)}
+                            placeholder="Scan ID or ISBN/Barcode..."
+                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
+                            autoFocus
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 font-medium"
+                        >
+                          Add to Lot
+                        </button>
+                      </form>
+                      
+                      <p className="text-xs text-gray-500">
+                        Scan internal ID (e.g., "9") or ISBN/barcode (e.g., "9780812693768")
+                      </p>
+                    </div>
+
+                    {lotItems.length > 0 && (
+                      <div className="mt-6">
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="text-md font-medium text-gray-900">
+                            Lot Preview ({lotItems.length} items)
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            Lot Number: {Math.min(...lotItems.map(item => item.id))}
+                          </p>
+                        </div>
+                        
+                        <button
+                          onClick={handleCreateLot}
+                          disabled={isCreatingLot || lotItems.length === 0}
+                          className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                        >
+                          {isCreatingLot ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              Creating Lot...
+                            </>
+                          ) : (
+                            <>
+                              <Package2 className="h-4 w-4 mr-2" />
+                              Create Lot ({lotItems.length} items)
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Items List Section */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900">Items in Lot</h3>
+                    
+                    {lotItems.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500">
+                        <Package2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p>No items scanned yet</p>
+                        <p className="text-sm">Start scanning items to add them to the lot</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {lotItems.map((item) => (
+                          <div key={item.id} className="bg-gray-50 rounded-lg p-4 flex items-center space-x-4">
+                            <div className="flex-shrink-0">
+                              {item.isbnMaster?.imageUrl ? (
+                                <img 
+                                  src={item.isbnMaster.imageUrl} 
+                                  alt="Book cover"
+                                  className="h-16 w-12 object-cover rounded shadow-sm"
+                                />
+                              ) : (
+                                <div className="h-16 w-12 bg-gray-200 rounded shadow-sm flex items-center justify-center">
+                                  <BookOpen className="h-6 w-6 text-gray-400" />
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {item.isbnMaster?.title || 'Unknown Title'}
+                              </p>
+                              <p className="text-sm text-gray-500 truncate">
+                                {item.isbnMaster?.author || 'Unknown Author'}
+                              </p>
+                              <div className="flex items-center space-x-4 mt-1">
+                                <span className="text-xs font-bold text-purple-600">
+                                  ID: #{item.id}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  ISBN: {item.isbn}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <button
+                              onClick={() => handleRemoveFromLot(item.id)}
+                              className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50"
+                              title="Remove from lot"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Manage Lots Modal */}
+        {showManageLotsModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-screen overflow-y-auto">
+              <div className="flex justify-between items-center p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">Manage Lots</h2>
+                <button
+                  onClick={() => {
+                    setShowManageLotsModal(false);
+                    setEditingLot(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                {editingLot ? (
+                  /* Edit Lot View */
+                  <div>
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900">
+                          Edit Lot #{editingLot.lotNumber}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {editingLot.items.length} items • Created {formatDate(editingLot.createdAt)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setEditingLot(null)}
+                        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
+                      >
+                        ← Back to Lots
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {editingLot.items.map((item: Item) => (
+                        <div key={item.id} className="bg-gray-50 rounded-lg p-4 flex items-center space-x-4">
+                          <div className="flex-shrink-0">
+                            {item.isbnMaster?.imageUrl ? (
+                              <img 
+                                src={item.isbnMaster.imageUrl} 
+                                alt="Book cover"
+                                className="h-16 w-12 object-cover rounded shadow-sm"
+                              />
+                            ) : (
+                              <div className="h-16 w-12 bg-gray-200 rounded shadow-sm flex items-center justify-center">
+                                <BookOpen className="h-6 w-6 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {item.isbnMaster?.title || 'Unknown Title'}
+                            </p>
+                            <p className="text-sm text-gray-500 truncate">
+                              {item.isbnMaster?.author || 'Unknown Author'}
+                            </p>
+                            <div className="flex items-center space-x-4 mt-1">
+                              <span className="text-xs font-bold text-purple-600">
+                                ID: #{item.id}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                ISBN: {item.isbn}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(item.currentStatus)}`}>
+                                {item.currentStatus}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => handleRemoveItemFromLot(item.id, editingLot.lotNumber)}
+                            className="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50"
+                            title="Remove from lot"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {editingLot.items.length === 0 && (
+                        <div className="text-center py-12 text-gray-500">
+                          <Package2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                          <p>No items left in this lot</p>
+                          <p className="text-sm">The lot will be automatically deleted when empty</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Lots List View */
+                  <div>
+                    <div className="mb-6">
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">All Lots</h3>
+                      <p className="text-sm text-gray-600">
+                        Manage your item lots. Items in lots are tracked together for location changes, listing, and sales.
+                      </p>
+                    </div>
+
+                    {isLoadingLots ? (
+                      <div className="text-center py-12">
+                        <RefreshCw className="h-8 w-8 text-gray-400 mx-auto mb-4 animate-spin" />
+                        <p className="text-gray-600">Loading lots...</p>
+                      </div>
+                    ) : allLots.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500">
+                        <Package2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p>No lots created yet</p>
+                        <p className="text-sm">Create your first lot using the "Create Lot" button</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {allLots.map((lot) => (
+                          <div key={lot.lotNumber} className="bg-gray-50 rounded-lg p-6 flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="bg-purple-100 p-3 rounded-lg">
+                                <Package2 className="h-6 w-6 text-purple-600" />
+                              </div>
+                              <div>
+                                <h4 className="text-lg font-medium text-gray-900">
+                                  Lot #{lot.lotNumber}
+                                </h4>
+                                <p className="text-sm text-gray-600">
+                                  {lot.itemCount} items • Created {formatDate(lot.createdAt)}
+                                </p>
+                                <div className="flex items-center space-x-4 mt-1">
+                                  <span className="text-xs text-gray-500">
+                                    Sample items: {lot.sampleTitles.slice(0, 2).join(', ')}
+                                    {lot.sampleTitles.length > 2 && ` and ${lot.sampleTitles.length - 2} more...`}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => {
+                                  // Fetch full lot details for editing
+                                  fetch(`/api/lots/${lot.lotNumber}`)
+                                    .then(res => res.json())
+                                    .then(result => {
+                                      if (result.success) {
+                                        setEditingLot({
+                                          ...result.data,
+                                          createdAt: lot.createdAt
+                                        });
+                                      }
+                                    });
+                                }}
+                                className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 font-medium text-sm"
+                              >
+                                <Edit3 className="h-4 w-4 inline mr-1" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete Lot #${lot.lotNumber}? This will ungroup all ${lot.itemCount} items.`)) {
+                                    handleDeleteLot(lot.lotNumber);
+                                  }
+                                }}
+                                className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 font-medium text-sm"
+                              >
+                                <Trash2 className="h-4 w-4 inline mr-1" />
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
