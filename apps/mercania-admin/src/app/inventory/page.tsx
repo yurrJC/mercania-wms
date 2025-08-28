@@ -72,6 +72,9 @@ export default function InventoryPage() {
   const [allLots, setAllLots] = useState<any[]>([]);
   const [editingLot, setEditingLot] = useState<any>(null);
   const [isLoadingLots, setIsLoadingLots] = useState(false);
+  const [isDeletingLot, setIsDeletingLot] = useState<number | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdLot, setCreatedLot] = useState<any>(null);
 
   // Fetch inventory data
   const fetchInventory = async (page = 1, status = '', search = '') => {
@@ -271,6 +274,14 @@ export default function InventoryPage() {
       const result = await response.json();
 
       if (result.success) {
+        // Store the created lot data for the success modal
+        setCreatedLot({
+          lotNumber: lotNumber,
+          itemCount: lotItems.length,
+          items: lotItems,
+          createdAt: new Date().toISOString()
+        });
+        
         // Clear the lot and close modal
         setLotItems([]);
         setShowLotModal(false);
@@ -291,6 +302,9 @@ export default function InventoryPage() {
         
         // Refresh lots list to include the new lot
         fetchAllLots();
+        
+        // Show success modal
+        setShowSuccessModal(true);
       } else {
         setError(result.error || 'Failed to create lot');
       }
@@ -332,12 +346,37 @@ export default function InventoryPage() {
 
   // Delete entire lot
   const handleDeleteLot = async (lotNumber: number) => {
+    // Prevent double-clicks
+    if (isDeletingLot === lotNumber) return;
+    
     try {
+      setIsDeletingLot(lotNumber);
+      
+      // Optimistically remove from UI immediately
+      setAllLots(prev => prev.filter(lot => lot.lotNumber !== lotNumber));
+      
+      // Update inventory items immediately
+      setInventoryData(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.map(item => 
+            item.lotNumber === lotNumber 
+              ? { ...item, lotNumber: null }
+              : item
+          )
+        };
+      });
+
       const response = await fetch(`/api/lots/${lotNumber}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
+        // If deletion failed, revert the optimistic updates
+        await fetchAllLots();
+        await fetchInventory(currentPage, statusFilter, searchTerm);
+        
         const errorResult = await response.json();
         setError(errorResult.error || `Failed to delete lot (${response.status})`);
         return;
@@ -345,34 +384,21 @@ export default function InventoryPage() {
 
       const result = await response.json();
 
-      if (result.success) {
-        // 1. Remove lot from the list immediately
-        setAllLots(prev => prev.filter(lot => lot.lotNumber !== lotNumber));
-        
-        // 2. Update all visible inventory items that were in this lot
-        setInventoryData(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            items: prev.items.map(item => 
-              item.lotNumber === lotNumber 
-                ? { ...item, lotNumber: null }
-                : item
-            )
-          };
-        });
-        
-        // 3. Force refresh the lots list to ensure UI consistency
+      if (!result.success) {
+        // If deletion failed, revert the optimistic updates
         await fetchAllLots();
-        
-        // 4. Also refresh inventory to ensure full consistency
         await fetchInventory(currentPage, statusFilter, searchTerm);
-      } else {
         setError(result.error || 'Failed to delete lot');
       }
+      // If successful, the optimistic updates are already applied - no need for additional API calls
     } catch (err) {
       console.error('Delete lot error:', err);
+      // If deletion failed, revert the optimistic updates
+      await fetchAllLots();
+      await fetchInventory(currentPage, statusFilter, searchTerm);
       setError('Failed to delete lot');
+    } finally {
+      setIsDeletingLot(null);
     }
   };
 
@@ -477,6 +503,207 @@ export default function InventoryPage() {
       case 'LISTED': return 'bg-green-100 text-green-800';
       case 'SOLD': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Print intake label for individual item
+  const handlePrintIntakeLabel = (item: Item) => {
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Intake Label #${item.id}</title>
+          <style>
+            @page {
+              size: 3in 2in;
+              margin: 0.1in;
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              margin: 0;
+              padding: 8px;
+              font-size: 14px;
+              line-height: 1.3;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 2px solid #000;
+              padding-bottom: 6px;
+              margin-bottom: 10px;
+            }
+            .internal-id {
+              font-size: 24px;
+              font-weight: bold;
+              text-align: center;
+              margin: 8px 0;
+              border: 2px solid #000;
+              padding: 8px;
+            }
+            .barcode {
+              text-align: center;
+              font-family: 'Libre Barcode 128', monospace;
+              font-size: 32px;
+              margin: 12px 0;
+              letter-spacing: 2px;
+            }
+            .info {
+              margin: 4px 0;
+              font-size: 12px;
+            }
+            .book-title {
+              font-weight: bold;
+              margin: 6px 0;
+              font-size: 11px;
+              line-height: 1.2;
+            }
+            .footer {
+              border-top: 1px solid #000;
+              padding-top: 6px;
+              margin-top: 10px;
+              font-size: 16px;
+              font-weight: bold;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <strong>MERCANIA WMS - INTAKE</strong>
+          </div>
+          
+          <div class="internal-id">
+            #${item.id}
+          </div>
+          
+          <div class="barcode">
+            *${item.id}*
+          </div>
+          
+          <div class="book-title">
+            ${item.isbnMaster?.title || 'Unknown Title'}
+          </div>
+          
+          <div class="info">
+            <strong>ISBN:</strong> ${item.isbn}
+          </div>
+          
+          <div class="info">
+            <strong>Condition:</strong> ${item.conditionGrade || 'Not Set'}
+          </div>
+          
+          <div class="info">
+            <strong>Intake:</strong> ${formatDate(item.intakeDate)}
+          </div>
+          
+          <div class="footer">
+            MERCANIA
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      // Auto-print after a short delay
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+    }
+  };
+
+  // Print lot label
+  const handlePrintLabel = (lot: any) => {
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Lot Label #${lot.lotNumber}</title>
+          <style>
+            @page {
+              size: 4in 2in;
+              margin: 0.1in;
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              margin: 0;
+              padding: 8px;
+              font-size: 12px;
+              line-height: 1.2;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 2px solid #000;
+              padding-bottom: 4px;
+              margin-bottom: 8px;
+            }
+            .lot-number {
+              font-size: 18px;
+              font-weight: bold;
+              margin: 4px 0;
+            }
+            .info {
+              margin: 2px 0;
+            }
+            .barcode {
+              text-align: center;
+              font-family: 'Libre Barcode 128', monospace;
+              font-size: 24px;
+              margin: 8px 0;
+              letter-spacing: 1px;
+            }
+            .footer {
+              border-top: 1px solid #000;
+              padding-top: 4px;
+              margin-top: 8px;
+              font-size: 10px;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <strong>MERCANIA WMS</strong>
+          </div>
+          
+          <div class="lot-number">
+            LOT #${lot.lotNumber}
+          </div>
+          
+          <div class="info">
+            <strong>Items:</strong> ${lot.itemCount}
+          </div>
+          
+          <div class="info">
+            <strong>Created:</strong> ${new Date(lot.createdAt).toLocaleDateString()}
+          </div>
+          
+          <div class="barcode">
+            *LOT${lot.lotNumber}*
+          </div>
+          
+          <div class="footer">
+            Mercania Warehouse Management System
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      // Auto-print after a short delay
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
     }
   };
 
@@ -952,6 +1179,33 @@ export default function InventoryPage() {
                   </div>
                 )}
               </div>
+
+              {/* Modal Footer with Actions */}
+              <div className="bg-gray-50 px-6 py-4 border-t flex flex-col sm:flex-row gap-3 sm:justify-between">
+                <div className="flex items-center text-sm text-gray-600">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Reprint the original intake label for this item
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handlePrintIntakeLabel(selectedItem)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                    </svg>
+                    Print Intake Label
+                  </button>
+                  <button
+                    onClick={() => setSelectedItem(null)}
+                    className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1299,6 +1553,20 @@ export default function InventoryPage() {
                             
                             <div className="flex items-center space-x-2">
                               <button
+                                onClick={() => handlePrintLabel({
+                                  lotNumber: lot.lotNumber,
+                                  itemCount: lot.itemCount,
+                                  createdAt: lot.createdAt
+                                })}
+                                className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 font-medium text-sm"
+                                title="Print lot label"
+                              >
+                                <svg className="h-4 w-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                                </svg>
+                                Print
+                              </button>
+                              <button
                                 onClick={() => {
                                   // Fetch full lot details for editing
                                   fetch(`/api/lots/${lot.lotNumber}`)
@@ -1323,10 +1591,20 @@ export default function InventoryPage() {
                                     handleDeleteLot(lot.lotNumber);
                                   }
                                 }}
-                                className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 font-medium text-sm"
+                                disabled={isDeletingLot === lot.lotNumber}
+                                className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                <Trash2 className="h-4 w-4 inline mr-1" />
-                                Delete
+                                {isDeletingLot === lot.lotNumber ? (
+                                  <>
+                                    <RefreshCw className="h-4 w-4 inline mr-1 animate-spin" />
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 className="h-4 w-4 inline mr-1" />
+                                    Delete
+                                  </>
+                                )}
                               </button>
                             </div>
                           </div>
@@ -1335,6 +1613,71 @@ export default function InventoryPage() {
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Modal */}
+        {showSuccessModal && createdLot && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center mb-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="ml-4">
+                    <h3 className="text-lg font-medium text-gray-900">Lot Created Successfully!</h3>
+                    <p className="text-sm text-gray-500">Your lot has been created and items have been grouped.</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-600">Lot Number:</span>
+                    <span className="text-lg font-bold text-purple-600">#{createdLot.lotNumber}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-600">Items in Lot:</span>
+                    <span className="text-sm font-semibold text-gray-900">{createdLot.itemCount} items</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Created:</span>
+                    <span className="text-sm text-gray-900">{formatDate(createdLot.createdAt)}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={() => handlePrintLabel(createdLot)}
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                    </svg>
+                    Print Label
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowSuccessModal(false);
+                      setCreatedLot(null);
+                    }}
+                    className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
+                  >
+                    Done
+                  </button>
+                </div>
+
+                <div className="mt-4 text-center">
+                  <p className="text-xs text-gray-500">
+                    💡 Tip: You can also print labels later from the "Manage Lots" section
+                  </p>
+                </div>
               </div>
             </div>
           </div>
