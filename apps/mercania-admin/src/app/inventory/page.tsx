@@ -13,7 +13,10 @@ import {
   DollarSign,
   BookOpen,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Trash2,
+  X,
+  AlertTriangle
 } from 'lucide-react';
 
 interface Item {
@@ -52,6 +55,9 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<Item | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch inventory data
   const fetchInventory = async (page = 1, status = '', search = '') => {
@@ -63,7 +69,20 @@ export default function InventoryPage() {
       params.append('page', page.toString());
       params.append('limit', '20');
       if (status) params.append('status', status);
-      if (search) params.append('isbn', search);
+      
+      // Smart search: determine if it's an ID or ISBN
+      if (search) {
+        const trimmedSearch = search.trim();
+        const isNumeric = /^\d+$/.test(trimmedSearch);
+        
+        if (isNumeric && trimmedSearch.length <= 6) {
+          // It's a short number (1-6 digits), likely an internal ID
+          params.append('search', trimmedSearch);
+        } else {
+          // It's either non-numeric or a long number (likely ISBN) - use isbn parameter
+          params.append('isbn', trimmedSearch);
+        }
+      }
 
       const response = await fetch(`/api/items?${params.toString()}`);
       
@@ -113,6 +132,58 @@ export default function InventoryPage() {
   // Format date
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
+  };
+
+  // Handle item deletion
+  const handleDeleteItem = async (item: Item) => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/items/${item.id}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Remove item from current data
+        setInventoryData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.filter(i => i.id !== item.id),
+            pagination: {
+              ...prev.pagination,
+              total: prev.pagination.total - 1
+            }
+          };
+        });
+        setShowDeleteConfirm(null);
+      } else {
+        setError(result.error || 'Failed to delete item');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      setError('Failed to delete item. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Handle view item details
+  const handleViewItem = async (item: Item) => {
+    try {
+      const response = await fetch(`/api/items/${item.id}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        setSelectedItem(result.data);
+      } else {
+        setError('Failed to load item details');
+      }
+    } catch (err) {
+      console.error('View item error:', err);
+      setError('Failed to load item details');
+    }
   };
 
   // Get status badge color
@@ -173,10 +244,13 @@ export default function InventoryPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by ISBN..."
+                  placeholder="Search by ID or ISBN..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Enter item ID (1-6 digits, e.g., "9") or ISBN (10-13 digits, e.g., "9780812693768")
+              </p>
             </form>
 
             {/* Status Filter */}
@@ -339,12 +413,22 @@ export default function InventoryPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => window.alert(`Item #${item.id} details (feature coming soon)`)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => handleViewItem(item)}
+                              className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                              title="View details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setShowDeleteConfirm(item)}
+                              className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
+                              title="Delete item"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -433,6 +517,184 @@ export default function InventoryPage() {
               <div>
                 <span className="font-medium text-blue-800">Items per Page:</span>
                 <span className="text-blue-700 ml-2">{inventoryData.pagination.limit}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Item Details Modal */}
+        {selectedItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
+              <div className="flex justify-between items-center p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">Item Details #{selectedItem.id}</h2>
+                <button
+                  onClick={() => setSelectedItem(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Book Information */}
+                  <div className="space-y-4">
+                    <div className="flex items-start space-x-4">
+                      {selectedItem.isbnMaster?.imageUrl ? (
+                        <img 
+                          src={selectedItem.isbnMaster.imageUrl} 
+                          alt="Book cover"
+                          className="h-32 w-24 object-cover rounded shadow-md"
+                        />
+                      ) : (
+                        <div className="h-32 w-24 bg-gray-200 rounded shadow-md flex items-center justify-center">
+                          <BookOpen className="h-8 w-8 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                          {selectedItem.isbnMaster?.title || 'Unknown Title'}
+                        </h3>
+                        <p className="text-gray-600 mb-1">
+                          <span className="font-medium">Author:</span> {selectedItem.isbnMaster?.author || 'Unknown'}
+                        </p>
+                        <p className="text-gray-600 mb-1">
+                          <span className="font-medium">Publisher:</span> {selectedItem.isbnMaster?.publisher || 'Unknown'}
+                        </p>
+                        <p className="text-gray-600">
+                          <span className="font-medium">Year:</span> {selectedItem.isbnMaster?.pubYear || 'Unknown'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Item Details */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ISBN</label>
+                      <p className="text-gray-900">{selectedItem.isbn}</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(selectedItem.currentStatus)}`}>
+                        {selectedItem.currentStatus}
+                      </span>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Condition</label>
+                      <p className="text-gray-900">{selectedItem.conditionGrade || 'Not Set'}</p>
+                      {selectedItem.conditionNotes && (
+                        <p className="text-sm text-gray-600 mt-1">{selectedItem.conditionNotes}</p>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                      <p className="text-gray-900">{selectedItem.currentLocation || 'Not assigned'}</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+                      <p className="text-gray-900">{formatCurrency(selectedItem.costCents)}</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Intake Date</label>
+                      <p className="text-gray-900">{formatDate(selectedItem.intakeDate)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status History */}
+                {selectedItem.statusHistory && selectedItem.statusHistory.length > 0 && (
+                  <div className="mt-6 border-t pt-6">
+                    <h4 className="text-lg font-medium text-gray-900 mb-4">Status History</h4>
+                    <div className="space-y-2">
+                      {selectedItem.statusHistory.slice(0, 5).map((history: any, index: number) => (
+                        <div key={index} className="flex justify-between items-center text-sm">
+                          <span className="text-gray-900">
+                            {history.fromStatus && `${history.fromStatus} → `}{history.toStatus}
+                          </span>
+                          <span className="text-gray-500">
+                            {formatDate(history.changedAt)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Active Listings */}
+                {selectedItem.listings && selectedItem.listings.length > 0 && (
+                  <div className="mt-6 border-t pt-6">
+                    <h4 className="text-lg font-medium text-gray-900 mb-4">Active Listings</h4>
+                    <div className="space-y-2">
+                      {selectedItem.listings.map((listing: any) => (
+                        <div key={listing.id} className="flex justify-between items-center text-sm bg-gray-50 p-3 rounded">
+                          <span className="text-gray-900">{listing.channel}</span>
+                          <span className="text-gray-900 font-medium">{formatCurrency(listing.priceCents)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center mb-4">
+                  <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
+                  <h3 className="text-lg font-medium text-gray-900">Delete Item</h3>
+                </div>
+                
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete item #{showDeleteConfirm.id}? This action cannot be undone.
+                </p>
+                
+                <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                  <p className="text-sm font-medium text-gray-900">
+                    {showDeleteConfirm.isbnMaster?.title || 'Unknown Title'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    ISBN: {showDeleteConfirm.isbn}
+                  </p>
+                </div>
+                
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(null)}
+                    disabled={isDeleting}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDeleteItem(showDeleteConfirm)}
+                    disabled={isDeleting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Item
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

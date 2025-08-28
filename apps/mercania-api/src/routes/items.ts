@@ -308,7 +308,7 @@ router.get('/:id', async (req, res) => {
 // GET /items - List items with filters
 router.get('/', async (req, res) => {
   try {
-    const { status, location, isbn, page = '1', limit = '50' } = req.query;
+    const { status, location, isbn, search, page = '1', limit = '50' } = req.query;
     
     const pageNum = parseInt(page as string) || 1;
     const limitNum = parseInt(limit as string) || 50;
@@ -316,9 +316,24 @@ router.get('/', async (req, res) => {
 
     const where: any = {};
     
+    // Basic filters
     if (status) where.currentStatus = status;
     if (location) where.currentLocation = location;
-    if (isbn) where.isbn = isbn;
+    
+    // Handle legacy isbn parameter
+    if (isbn) {
+      where.isbn = isbn;
+    }
+    
+    // Handle search parameter for ID search
+    if (search) {
+      const searchId = parseInt(String(search));
+      if (!isNaN(searchId)) {
+        where.id = searchId;
+      }
+    }
+
+    // console.log('Search where clause:', JSON.stringify(where));
 
     const [items, total] = await Promise.all([
       prisma.item.findMany({
@@ -346,6 +361,80 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     console.error('List items error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
+
+// DELETE /items/:id - Delete an item
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const itemId = parseInt(id);
+
+    if (isNaN(itemId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid item ID'
+      });
+    }
+
+    // Check if item exists
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { 
+        listings: true,
+        orderLines: true,
+        statusHistory: true
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        error: 'Item not found'
+      });
+    }
+
+    // Check if item can be deleted (no active listings or sales)
+    const activeListings = item.listings.filter(listing => listing.status === 'ACTIVE');
+    if (activeListings.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete item with active listings'
+      });
+    }
+
+    if (item.orderLines.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete item that has been sold'
+      });
+    }
+
+    // Delete related records first (cascade delete)
+    await prisma.itemStatusHistory.deleteMany({
+      where: { itemId: itemId }
+    });
+
+    await prisma.listing.deleteMany({
+      where: { itemId: itemId }
+    });
+
+    // Delete the item
+    await prisma.item.delete({
+      where: { id: itemId }
+    });
+
+    res.json({
+      success: true,
+      message: 'Item deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete item error:', error);
     res.status(500).json({
       success: false,
       error: 'Internal server error'
