@@ -74,9 +74,9 @@ export default function Dashboard() {
               <Plus className="h-4 w-4 mr-2" />
               Intake
             </Link>
-            <Link href="/test" className="flex items-center px-3 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent">
+            <Link href="/inventory" className="flex items-center px-3 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent">
               <Package className="h-4 w-4 mr-2" />
-              Test Page
+              Inventory
             </Link>
             <div className="flex items-center px-3 py-4 text-sm font-medium text-gray-400 border-b-2 border-transparent">
               <Tag className="h-4 w-4 mr-2" />
@@ -174,18 +174,18 @@ export default function Dashboard() {
                 <Plus className="h-4 w-4 mr-3 text-blue-600" />
                 Start Item Intake
               </Link>
-              <div className="flex items-center p-3 text-sm font-medium text-gray-400 bg-gray-50 rounded-lg">
-                <Package className="h-4 w-4 mr-3 text-gray-400" />
-                Assign Location (Coming Soon)
-              </div>
+              <Link href="/inventory" className="flex items-center p-3 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <Package className="h-4 w-4 mr-3 text-blue-600" />
+                View Inventory
+              </Link>
               <div className="flex items-center p-3 text-sm font-medium text-gray-400 bg-gray-50 rounded-lg">
                 <Tag className="h-4 w-4 mr-3 text-gray-400" />
                 Create Listing (Coming Soon)
               </div>
-              <Link href="/test" className="flex items-center p-3 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <BarChart3 className="h-4 w-4 mr-3 text-blue-600" />
-                View Test Page
-              </Link>
+              <div className="flex items-center p-3 text-sm font-medium text-gray-400 bg-gray-50 rounded-lg">
+                <BarChart3 className="h-4 w-4 mr-3 text-gray-400" />
+                View Reports (Coming Soon)
+              </div>
             </div>
           </div>
         </div>

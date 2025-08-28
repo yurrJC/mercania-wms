@@ -158,15 +158,21 @@ export default function IntakePage() {
 
       if (response.ok) {
         const result = await response.json();
-        setInternalId(result.data.internalId || Math.floor(Math.random() * 10000) + 1);
-        setSuccess(true);
+        console.log('Intake API Response:', result);
+        
+        if (result.success) {
+          setInternalId(result.data.internalId);
+          setSuccess(true);
+        } else {
+          throw new Error(result.error || 'Failed to create item');
+        }
       } else {
-        throw new Error('Failed to create item');
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
     } catch (err) {
-      // For demo purposes, we'll simulate success with a sequential-looking ID
-      setInternalId(Math.floor(Math.random() * 10000) + 1);
-      setSuccess(true);
+      console.error('Intake submission error:', err);
+      setError(`Failed to create item: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
