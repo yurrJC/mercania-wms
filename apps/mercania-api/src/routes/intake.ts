@@ -2,15 +2,18 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../index';
 import dvdRoutes from './dvd';
+import cdRoutes from './cd';
 
 const router = Router();
 
-// Mount DVD routes
+// Mount DVD and CD routes
 router.use('/dvd', dvdRoutes);
+router.use('/cd', cdRoutes);
 
 // Validation schemas
 const IntakeSchema = z.object({
-  isbn: z.string().min(8).max(14).regex(/^\d+$/), // Support both ISBN and UPC
+  isbn: z.string().optional().nullable(), // ISBN, UPC, or any product barcode - allow null for manual entries
+  barcode: z.string().optional().nullable(), // Alias for isbn field for better API clarity
   title: z.string().optional(),
   author: z.string().optional(), // For DVDs, this will be the director
   publisher: z.string().optional(), // For DVDs, this will be the studio
@@ -19,11 +22,15 @@ const IntakeSchema = z.object({
   conditionGrade: z.string().optional(),
   conditionNotes: z.string().optional(),
   costCents: z.number().int().min(0).default(0),
-  productType: z.string().optional(), // 'BOOK' or 'DVD'
+  productType: z.string().optional(), // 'BOOK', 'DVD', or 'CD'
   dvdMetadata: z.object({
-    genre: z.string().optional(),
-    rating: z.string().optional(),
-    runtime: z.number().optional()
+    genre: z.string().nullable().optional(), // Allow null genre
+    rating: z.string().nullable().optional(), // Allow null rating
+    runtime: z.number().nullable().optional() // Allow null runtime
+  }).optional(),
+  cdMetadata: z.object({
+    genre: z.string().nullable().optional(), // Allow null genre
+    runtime: z.number().nullable().optional() // Allow null runtime
   }).optional()
 });
 
@@ -39,9 +46,9 @@ interface ISBNdbResponse {
     language?: string;
     synopsis?: string;
     subjects?: string[];
+    image?: string;
     isbn?: string;
     isbn13?: string;
-    image?: string;
   };
 }
 
@@ -72,7 +79,7 @@ async function lookupIsbn(isbn: string) {
       throw new Error(`ISBNdb API error: ${response.status} ${response.statusText}`);
     }
 
-    const data: ISBNdbResponse = await response.json();
+    const data = await response.json() as ISBNdbResponse;
     
     if (!data.book) {
       console.log(`No book data returned for ISBN ${isbn}`);
@@ -170,13 +177,42 @@ function getUnknownBookData(isbn: string) {
 }
 
 // POST /intake - Create new item from ISBN or UPC
-router.post('/', async (req, res) => {
+router.post('/', async (req, res): Promise<any> => {
   try {
+    console.log('=== INTAKE REQUEST START ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     // Validate input
     const validatedData = IntakeSchema.parse(req.body);
+    console.log('Validated data:', JSON.stringify(validatedData, null, 2));
     
     const productType = validatedData.productType || 'BOOK';
-    const identifier = validatedData.isbn; // This could be ISBN or UPC
+    // Support both 'isbn' and 'barcode' fields for flexibility
+    let identifier = validatedData.barcode || validatedData.isbn; // This could be ISBN, UPC, or any product barcode
+    
+    // Handle different scenarios based on product type and identifier
+    if (!identifier || identifier.trim() === '') {
+      // Allow manual entries for books only, require barcode for DVDs/CDs
+      if (productType === 'BOOK') {
+        // For manual books, require at least a title
+        if (!validatedData.title || !validatedData.title.trim()) {
+          return res.status(400).json({
+            success: false,
+            error: 'For manual book entries, title is required'
+          });
+        }
+        
+        identifier = null; // No ISBN for manual books - will be tracked by internal ID only
+        console.log('Creating manual book entry (no ISBN)');
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: `${productType === 'DVD' ? 'UPC' : 'Barcode'} is required for ${productType.toLowerCase()} entries`
+        });
+      }
+    } else {
+      identifier = identifier.trim();
+      console.log(`Using provided identifier: ${identifier}`);
+    }
     
     let itemData;
     
@@ -192,62 +228,134 @@ router.post('/', async (req, res) => {
         imageUrl: null,
         categories: validatedData.dvdMetadata?.genre ? [validatedData.dvdMetadata.genre] : []
       };
+    } else if (productType === 'CD') {
+      // For CDs, use the provided form data instead of API lookup
+      // since the lookup already happened on the frontend
+      itemData = {
+        title: validatedData.title || 'Unknown CD',
+        author: validatedData.author || 'Unknown Artist',
+        publisher: validatedData.publisher || 'Unknown Label',
+        pubYear: validatedData.pubYear || null,
+        binding: validatedData.binding || 'CD',
+        imageUrl: null,
+        categories: validatedData.cdMetadata?.genre ? [validatedData.cdMetadata.genre] : []
+      };
     } else {
-      // For books, lookup ISBN metadata as before
-      itemData = await lookupIsbn(identifier);
-      
-      // Override with any provided data (for manual entries)
-      if (validatedData.title) itemData.title = validatedData.title;
-      if (validatedData.author) itemData.author = validatedData.author;
-      if (validatedData.publisher) itemData.publisher = validatedData.publisher;
-      if (validatedData.pubYear) itemData.pubYear = validatedData.pubYear;
-      if (validatedData.binding) itemData.binding = validatedData.binding;
+      // For books
+      if (identifier && identifier.startsWith('MB')) {
+        // Manual book entry - use provided form data instead of API lookup
+        itemData = {
+          title: validatedData.title || 'Unknown Book',
+          author: validatedData.author || 'Unknown Author',
+          publisher: validatedData.publisher || 'Unknown Publisher',
+          pubYear: validatedData.pubYear || null,
+          binding: validatedData.binding || 'Unknown',
+          imageUrl: null,
+          categories: []
+        };
+      } else if (identifier && identifier.startsWith('MC')) {
+        // Manual CD entry - use provided form data instead of API lookup
+        itemData = {
+          title: validatedData.title || 'Unknown CD',
+          author: validatedData.author || 'Unknown Artist',
+          publisher: validatedData.publisher || 'Unknown Label',
+          pubYear: validatedData.pubYear || null,
+          binding: validatedData.binding || 'CD',
+          imageUrl: null,
+          categories: validatedData.cdMetadata?.genre ? [validatedData.cdMetadata.genre] : []
+        };
+      } else if (identifier) {
+        // Regular ISBN lookup for books with barcodes
+        itemData = await lookupIsbn(identifier);
+        
+        // Override with any provided data (for manual entries)
+        if (validatedData.title) itemData.title = validatedData.title;
+        if (validatedData.author) itemData.author = validatedData.author;
+        if (validatedData.publisher) itemData.publisher = validatedData.publisher;
+        if (validatedData.pubYear) itemData.pubYear = validatedData.pubYear;
+        if (validatedData.binding) itemData.binding = validatedData.binding;
+      } else {
+        // Manual book without barcode - use provided data only
+        itemData = {
+          title: validatedData.title || 'Untitled Book',
+          author: validatedData.author || 'Unknown Author',
+          publisher: validatedData.publisher || 'Unknown Publisher',
+          pubYear: validatedData.pubYear || null,
+          binding: validatedData.binding || 'Unknown',
+          imageUrl: null,
+          categories: []
+        };
+      }
     }
     
-    // Check for existing items with this identifier (regardless of status)
-    const existingItems = await prisma.item.findMany({
+    // Check for existing items with this identifier (only if identifier exists)
+    const existingItems = identifier ? await prisma.item.findMany({
       where: { isbn: identifier },
       include: { isbnMaster: true },
       orderBy: { createdAt: 'desc' }
-    });
+    }) : [];
 
-    // Create or update ISBN/UPC master record
-    const isbnMaster = await prisma.isbnMaster.upsert({
-      where: { isbn: identifier },
-      update: {
-        title: itemData.title,
-        author: itemData.author,
-        publisher: itemData.publisher,
-        pubYear: itemData.pubYear,
-        binding: itemData.binding,
-        imageUrl: itemData.imageUrl,
-        categories: itemData.categories
-      },
-      create: {
-        isbn: identifier,
-        title: itemData.title,
-        author: itemData.author,
-        publisher: itemData.publisher,
-        pubYear: itemData.pubYear,
-        binding: itemData.binding,
-        imageUrl: itemData.imageUrl,
-        categories: itemData.categories
-      }
-    });
+    // Create or update ISBN/UPC master record (only for items with barcodes)
+    // Manual books with no ISBN will not have a master record - they're tracked by internal ID only
+    let isbnMaster = null;
+    if (identifier) {
+      isbnMaster = await prisma.isbnMaster.upsert({
+        where: { isbn: identifier },
+        update: {
+          title: itemData.title,
+          author: itemData.author,
+          publisher: itemData.publisher,
+          pubYear: itemData.pubYear,
+          binding: itemData.binding,
+          imageUrl: itemData.imageUrl,
+          categories: itemData.categories
+        },
+        create: {
+          isbn: identifier,
+          title: itemData.title,
+          author: itemData.author,
+          publisher: itemData.publisher,
+          pubYear: itemData.pubYear,
+          binding: itemData.binding,
+          imageUrl: itemData.imageUrl,
+          categories: itemData.categories
+        }
+      });
+    }
 
     // Create new item (PostgreSQL auto-generates sequential ID)
-    const item = await prisma.item.create({
-      data: {
-        isbn: identifier,
-        conditionGrade: validatedData.conditionGrade,
-        conditionNotes: validatedData.conditionNotes,
-        costCents: validatedData.costCents,
-        currentStatus: 'INTAKE'
-      },
-      include: {
-        isbnMaster: true
-      }
-    });
+    // For manual books, isbn will be null and there's no isbnMaster relation
+    console.log('=== CREATING ITEM ===');
+    console.log('Item data to create:', JSON.stringify(itemData, null, 2));
+    console.log('Creating item with identifier:', identifier);
+    
+    let item;
+    if (identifier) {
+      // Item with ISBN - include the master relation
+      item = await prisma.item.create({
+        data: {
+          isbn: identifier,
+          conditionGrade: validatedData.conditionGrade,
+          conditionNotes: validatedData.conditionNotes,
+          costCents: validatedData.costCents,
+          currentStatus: 'INTAKE'
+        },
+        include: {
+          isbnMaster: true
+        }
+      });
+    } else {
+      // Manual book without ISBN - no master relation
+      item = await prisma.item.create({
+        data: {
+          isbn: null, // Explicitly set to null for manual books
+          conditionGrade: validatedData.conditionGrade,
+          conditionNotes: validatedData.conditionNotes,
+          costCents: validatedData.costCents,
+          currentStatus: 'INTAKE'
+        }
+      });
+    }
 
     // Log status change
     await prisma.itemStatusHistory.create({
@@ -281,6 +389,16 @@ router.post('/', async (req, res) => {
       data: {
         item,
         internalId: item.id, // Return the simple integer ID
+        // For manual books without ISBN, include the book metadata directly
+        ...(identifier ? {} : { 
+          bookMetadata: {
+            title: itemData.title,
+            author: itemData.author,
+            publisher: itemData.publisher,
+            pubYear: itemData.pubYear,
+            binding: itemData.binding
+          }
+        }),
         zplTemplate: `/zpl/mercania_item_label.zpl?internalId=${item.id}&intakeDate=${new Date().toISOString().split('T')[0]}`
       }
     });
@@ -295,6 +413,8 @@ router.post('/', async (req, res) => {
     }
 
     console.error('Intake error:', error);
+    console.error('Error stack:', (error as Error).stack);
+    console.error('Request body:', req.body);
     res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -303,7 +423,7 @@ router.post('/', async (req, res) => {
 });
 
 // GET /intake/:isbn - Get ISBN metadata (for frontend preview)
-router.get('/:isbn', async (req, res) => {
+router.get('/:isbn', async (req, res): Promise<any> => {
   try {
     const { isbn } = req.params;
     
@@ -322,7 +442,10 @@ router.get('/:isbn', async (req, res) => {
     
     res.json({
       success: true,
-      data: bookData,
+      data: {
+        ...bookData,
+        isbn: isbn // Include the original ISBN in the response
+      },
       source: process.env.ISBNDB_API_KEY ? 'isbndb' : 'mock'
     });
 

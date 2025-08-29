@@ -308,7 +308,7 @@ router.get('/:id', async (req, res) => {
 // GET /items - List items with filters
 router.get('/', async (req, res) => {
   try {
-    const { status, location, isbn, search, lotNumber, sort, page = '1', limit = '50' } = req.query;
+    const { status, location, isbn, barcode, search, lotNumber, sort, page = '1', limit = '50' } = req.query;
     
     const pageNum = parseInt(page as string) || 1;
     const limitNum = Math.min(parseInt(limit as string) || 50, 100); // Max 100 items per page
@@ -376,20 +376,23 @@ router.get('/', async (req, res) => {
       }
     }
     
-    // ISBN search (highly specific, good for caching)
-    if (isbn) {
-      const isbnStr = String(isbn).trim();
-      if (isbnStr.length >= 10) { // Valid ISBN length check
-        where.isbn = isbnStr;
-        cacheKey += `_isbn_${isbnStr}`;
-        cacheDuration = 3600; // 1 hour - ISBN data is very stable
+    // Barcode search (ISBN, UPC, or any product barcode) - highly specific, good for caching
+    const barcodeValue = barcode || isbn; // Support both 'barcode' and 'isbn' parameters
+    if (barcodeValue) {
+      const barcodeStr = String(barcodeValue).trim();
+      // Allow real barcodes (10+ digits) or internal identifiers (MC/MD/MB prefix)
+      if (barcodeStr.length >= 10 || /^M[BCD]\d+$/.test(barcodeStr)) {
+        where.isbn = barcodeStr; // Note: Still using 'isbn' field in database for now
+        cacheKey += `_barcode_${barcodeStr}`;
+        cacheDuration = 3600; // 1 hour - barcode data is very stable
       }
     }
     
-    // ID search (specific item lookup)
+    // ID search (specific item lookup) - only for reasonable integer values
     if (search) {
       const searchId = parseInt(String(search));
-      if (!isNaN(searchId) && searchId > 0) {
+      // Only treat as ID if it's a reasonable integer (not a large ISBN)
+      if (!isNaN(searchId) && searchId > 0 && searchId < 2147483647) { // INT4 max value
         where.id = searchId;
         cacheKey += `_id_${searchId}`;
         cacheDuration = 1800; // 30 minutes - specific item data is stable

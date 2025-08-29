@@ -29,12 +29,12 @@ enum ListingStatus {
 
 model IsbnMaster {
   id         Int      @id @default(autoincrement())
-  isbn       String   @unique @db.VarChar(13)
+  isbn       String   @unique @db.VarChar(13) // ISBN, UPC, or any product barcode
   title      String   @db.VarChar(500)
-  author     String?  @db.VarChar(200)
-  publisher  String?  @db.VarChar(200)
+  author     String?  @db.VarChar(200) // Author for books, Director for DVDs, Artist for CDs
+  publisher  String?  @db.VarChar(200) // Publisher for books, Studio for DVDs, Label for CDs
   pubYear    Int?
-  binding    String?  @db.VarChar(50)
+  binding    String?  @db.VarChar(50)  // Format: Hardcover, Paperback, DVD, CD, etc.
   imageUrl   String?
   categories String[]
   createdAt  DateTime @default(now())
@@ -47,7 +47,7 @@ model IsbnMaster {
 
 model Item {
   id              Int       @id @default(autoincrement()) // Sequential: 1, 2, 3...
-  isbn            String?   @db.VarChar(13)
+  isbn            String?   @db.VarChar(13) // ISBN, UPC, or product barcode
   conditionGrade  String?   @db.VarChar(10)
   conditionNotes  String?
   costCents       Int       @default(0)
@@ -65,7 +65,7 @@ model Item {
 
   // Performance indexes for scale
   @@index([lotNumber])           // Fast lot queries
-  @@index([isbn])                // Fast ISBN searches  
+  @@index([isbn])                // Fast ISBN/barcode searches
   @@index([currentStatus])       // Fast status filtering
   @@index([currentLocation])     // Fast location filtering
   @@index([currentStatus, currentLocation]) // Combined filters

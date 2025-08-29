@@ -9,19 +9,19 @@ const lookupDVDByUPC = async (upc: string) => {
   try {
     // Note: You'll need to add your eBay API credentials to environment variables
     const EBAY_APP_ID = process.env.EBAY_APP_ID;
-    const EBAY_CLIENT_ID = process.env.EBAY_CLIENT_ID;
+    const EBAY_DEV_ID = process.env.EBAY_DEV_ID;
     const EBAY_CLIENT_SECRET = process.env.EBAY_CLIENT_SECRET;
 
-    if (!EBAY_APP_ID || !EBAY_CLIENT_ID || !EBAY_CLIENT_SECRET) {
+    if (!EBAY_APP_ID || !EBAY_DEV_ID || !EBAY_CLIENT_SECRET) {
       throw new Error('eBay API credentials not configured');
     }
 
-    // First, get an access token
+    // First, get an access token using App ID and Client Secret
     const tokenResponse = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${Buffer.from(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`).toString('base64')}`
+        'Authorization': `Basic ${Buffer.from(`${EBAY_APP_ID}:${EBAY_CLIENT_SECRET}`).toString('base64')}`
       },
       body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope'
     });
