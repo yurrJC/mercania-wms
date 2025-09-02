@@ -16,11 +16,13 @@
   },
   "dependencies": {
     "@prisma/client": "^5.2.0",
+    "@types/pdfkit": "^0.17.2",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.18.2",
     "helmet": "^7.0.0",
     "morgan": "^1.10.0",
+    "pdfkit": "^0.17.2",
     "prisma": "^5.2.0",
     "ulid": "^2.3.0",
     "zod": "^3.22.4"

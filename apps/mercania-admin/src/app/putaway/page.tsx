@@ -11,7 +11,8 @@ import {
   AlertCircle,
   RotateCcw,
   BookOpen,
-  Package
+  Package,
+  Download
 } from 'lucide-react';
 
 interface Item {
@@ -29,7 +30,7 @@ interface Item {
 
 interface PutawaySession {
   type: 'item' | 'lot';
-  identifier: string;
+  identifier: number | string;
   items: Item[];
   targetLocation: string;
   timestamp: Date;
@@ -37,7 +38,8 @@ interface PutawaySession {
 
 export default function PutawayPage() {
   const [mode, setMode] = useState<'select' | 'item' | 'lot'>('select');
-  const [itemInput, setItemInput] = useState('');
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [internalIdInput, setInternalIdInput] = useState('');
   const [lotInput, setLotInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
   const [currentItem, setCurrentItem] = useState<Item | null>(null);
@@ -48,14 +50,15 @@ export default function PutawayPage() {
   const [sessions, setSessions] = useState<PutawaySession[]>([]);
   const [awaitingLocation, setAwaitingLocation] = useState(false);
 
-  const itemInputRef = useRef<HTMLInputElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const internalIdInputRef = useRef<HTMLInputElement>(null);
   const lotInputRef = useRef<HTMLInputElement>(null);
   const locationInputRef = useRef<HTMLInputElement>(null);
 
   // Focus management
   useEffect(() => {
-    if (mode === 'item' && itemInputRef.current) {
-      itemInputRef.current.focus();
+    if (mode === 'item' && barcodeInputRef.current && !awaitingLocation) {
+      barcodeInputRef.current.focus();
     } else if (mode === 'lot' && lotInputRef.current) {
       lotInputRef.current.focus();
     } else if (awaitingLocation && locationInputRef.current) {
@@ -63,10 +66,57 @@ export default function PutawayPage() {
     }
   }, [mode, awaitingLocation]);
 
-  // Handle item lookup (barcode or internal ID)
-  const handleItemLookup = async (identifier: string) => {
-    if (!identifier) {
-      setError('Please scan or enter an item identifier');
+  // Handle PDF download
+  const handleDownloadPDF = async () => {
+    try {
+      setIsLoading(true);
+      // Build session rows for PDF: Internal ID, Old SKU, New SKU, timestamp
+      const sessionRows = sessions.slice(-10).map(s => {
+        return s.items.map(it => ({
+          internalId: it.id,
+          oldSKU: `${it.currentLocation ? it.currentLocation : 'TBD'}-${it.id}`,
+          newSKU: `${s.targetLocation}-${it.id}`,
+          timestamp: s.timestamp
+        }));
+      }).flat();
+
+      if (sessionRows.length === 0) {
+        throw new Error('No recent putaway activity in this session');
+      }
+
+      const response = await fetch('/api/items/putaway-activity/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: sessionRows })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF report');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `putaway-activity-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setSuccess('PDF report downloaded successfully!');
+    } catch (err) {
+      console.error('PDF download error:', err);
+      setError('Failed to download PDF report. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle barcode/ISBN lookup (first-copy priority)
+  const handleBarcodeLookup = async (barcode: string) => {
+    if (!barcode.trim()) {
+      setError('Please scan or enter a barcode/ISBN');
       return;
     }
 
@@ -74,30 +124,94 @@ export default function PutawayPage() {
     setError('');
 
     try {
-      // First try by ID, then by ISBN/barcode
-      let response = await fetch(`/api/items?search=${identifier}`);
+      // Use barcode search for first-copy priority
+      const response = await fetch(`/api/items?isbn=${barcode.trim()}&limit=1`);
+      console.log(`Putaway: Barcode search for ${barcode.trim()} (first-copy priority)`);
       
       if (!response.ok) {
-        throw new Error('Failed to lookup item');
+        throw new Error('Failed to lookup item by barcode');
       }
 
       const result = await response.json();
       
       if (!result.success || !result.data.items || result.data.items.length === 0) {
-        throw new Error('Item not found');
+        throw new Error('Item not found with this barcode');
       }
 
       const item = result.data.items[0];
       setCurrentItem(item);
       setAwaitingLocation(true);
-      setSuccess(`Item found: ${item.isbnMaster?.title || 'Unknown Title'}`);
+      setSuccess(`📦 Found FIRST COPY: ${item.isbnMaster?.title || 'Unknown Title'} (ID: ${item.id})`);
 
     } catch (err) {
-      console.error('Item lookup error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to lookup item');
+      console.error('Barcode lookup error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to lookup item by barcode');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle internal ID lookup (specific item)
+  const handleInternalIdLookup = async (internalId: string) => {
+    if (!internalId.trim()) {
+      setError('Please enter an internal ID');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Use ID search for specific item lookup
+      const response = await fetch(`/api/items?search=${internalId.trim()}`);
+      console.log(`Putaway: Internal ID search for ${internalId.trim()} (specific item)`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to lookup item by internal ID');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success || !result.data.items || result.data.items.length === 0) {
+        throw new Error('Item not found with this internal ID');
+      }
+
+      const item = result.data.items[0];
+      setCurrentItem(item);
+      setAwaitingLocation(true);
+      setSuccess(`🎯 Found SPECIFIC COPY: ${item.isbnMaster?.title || 'Unknown Title'} (ID: ${item.id})`);
+
+    } catch (err) {
+      console.error('Internal ID lookup error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to lookup item by internal ID');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Key press handlers
+  const handleBarcodeKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleBarcodeLookup(barcodeInput);
+    }
+  };
+
+  const handleInternalIdKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleInternalIdLookup(internalIdInput);
+    }
+  };
+
+  // Clear both inputs when switching to item mode
+  const resetItemInputs = () => {
+    setBarcodeInput('');
+    setInternalIdInput('');
+    setCurrentItem(null);
+    setAwaitingLocation(false);
+    setError('');
+    setSuccess('');
   };
 
   // Handle lot lookup
@@ -164,7 +278,7 @@ export default function PutawayPage() {
         // Add to session history
         setSessions(prev => [...prev, {
           type: 'item',
-          identifier: currentItem.id.toString(),
+          identifier: currentItem.id,
           items: [currentItem],
           targetLocation: location.toUpperCase(),
           timestamp: new Date()
@@ -195,7 +309,7 @@ export default function PutawayPage() {
         // Add to session history
         setSessions(prev => [...prev, {
           type: 'lot',
-          identifier: currentLot.lotNumber.toString(),
+          identifier: currentLot.lotNumber,
           items: currentLot.items,
           targetLocation: location.toUpperCase(),
           timestamp: new Date()
@@ -223,7 +337,8 @@ export default function PutawayPage() {
   const resetCurrentScan = () => {
     setCurrentItem(null);
     setCurrentLot(null);
-    setItemInput('');
+    setBarcodeInput('');
+    setInternalIdInput('');
     setLotInput('');
     setLocationInput('');
     setAwaitingLocation(false);
@@ -231,20 +346,12 @@ export default function PutawayPage() {
 
     // Refocus on appropriate input
     setTimeout(() => {
-      if (mode === 'item' && itemInputRef.current) {
-        itemInputRef.current.focus();
+      if (mode === 'item' && barcodeInputRef.current) {
+        barcodeInputRef.current.focus();
       } else if (mode === 'lot' && lotInputRef.current) {
         lotInputRef.current.focus();
       }
     }, 100);
-  };
-
-  // Handle keyboard events
-  const handleItemKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleItemLookup(itemInput);
-    }
   };
 
   const handleLotKeyPress = (e: React.KeyboardEvent) => {
@@ -349,40 +456,102 @@ export default function PutawayPage() {
               <p className="text-gray-600 mt-2">Scan barcode or enter internal ID to assign location</p>
             </div>
 
-            {/* Item Input */}
+            {/* Dual Search Inputs */}
             {!awaitingLocation && (
+              <div className="space-y-4">
+                {/* Barcode/ISBN Search */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex items-center mb-4">
                   <Scan className="h-5 w-5 text-blue-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Scan Item</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Barcode/ISBN Search</h3>
+                    <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                      FIRST COPY PRIORITY
+                    </span>
                 </div>
+                  <p className="text-sm text-gray-600 mb-4">
+                    📦 Scan or enter ISBN/UPC barcode - always returns the <strong>oldest copy</strong> first
+                  </p>
                 
                 <div className="flex space-x-4">
                   <div className="flex-1">
-                    <label htmlFor="itemInput" className="block text-sm font-medium text-gray-700 mb-2">
-                      Barcode or Internal ID
+                      <label htmlFor="barcodeInput" className="block text-sm font-medium text-gray-700 mb-2">
+                        ISBN/UPC Barcode
                     </label>
                     <input
-                      ref={itemInputRef}
+                        ref={barcodeInputRef}
                       type="text"
-                      id="itemInput"
-                      value={itemInput}
-                      onChange={(e) => setItemInput(e.target.value)}
-                      onKeyPress={handleItemKeyPress}
-                      placeholder="Scan barcode or type ID..."
+                        id="barcodeInput"
+                        value={barcodeInput}
+                        onChange={(e) => setBarcodeInput(e.target.value)}
+                        onKeyPress={handleBarcodeKeyPress}
+                        placeholder="e.g., 9780307474278"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-mono"
                       disabled={isLoading}
                     />
                   </div>
                   <div className="flex flex-col justify-end">
                     <button
-                      onClick={() => handleItemLookup(itemInput)}
-                      disabled={isLoading || !itemInput}
+                        onClick={() => handleBarcodeLookup(barcodeInput)}
+                        disabled={isLoading || !barcodeInput.trim()}
                       className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
                     >
-                      {isLoading ? 'Looking up...' : 'Lookup'}
-                    </button>
+                        {isLoading ? 'Looking up...' : 'Find First Copy'}
+                      </button>
+                    </div>
                   </div>
+                </div>
+
+                {/* Internal ID Search */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex items-center mb-4">
+                    <Package className="h-5 w-5 text-green-600 mr-2" />
+                    <h3 className="text-lg font-semibold text-gray-900">Internal ID Search</h3>
+                    <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                      SPECIFIC COPY
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-4">
+                    🎯 Enter internal ID number - returns the <strong>exact copy</strong> you specify
+                  </p>
+                  
+                  <div className="flex space-x-4">
+                    <div className="flex-1">
+                      <label htmlFor="internalIdInput" className="block text-sm font-medium text-gray-700 mb-2">
+                        Internal ID Number
+                      </label>
+                      <input
+                        ref={internalIdInputRef}
+                        type="text"
+                        id="internalIdInput"
+                        value={internalIdInput}
+                        onChange={(e) => setInternalIdInput(e.target.value)}
+                        onKeyPress={handleInternalIdKeyPress}
+                        placeholder="e.g., 57, 58"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg font-mono"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <button
+                        onClick={() => handleInternalIdLookup(internalIdInput)}
+                        disabled={isLoading || !internalIdInput.trim()}
+                        className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                      >
+                        {isLoading ? 'Looking up...' : 'Find Specific Copy'}
+                    </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reset Button */}
+                <div className="text-center">
+                  <button
+                    onClick={resetItemInputs}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
+                  >
+                    <RotateCcw className="h-4 w-4 inline mr-1" />
+                    Clear All
+                  </button>
                 </div>
               </div>
             )}
@@ -607,7 +776,17 @@ export default function PutawayPage() {
         {/* Session History */}
         {sessions.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Putaway Activity</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Recent Putaway Activity</h3>
+              <button
+                onClick={handleDownloadPDF}
+                disabled={isLoading}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center disabled:opacity-50"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </button>
+            </div>
             <div className="space-y-3 max-h-64 overflow-y-auto">
               {sessions.slice(-10).reverse().map((session, index) => (
                 <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">

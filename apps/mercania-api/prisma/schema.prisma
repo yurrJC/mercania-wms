@@ -52,6 +52,11 @@ model Item {
   conditionNotes  String?
   costCents       Int       @default(0)
   intakeDate      DateTime  @default(now())
+  listedDate      DateTime? // Date when item was listed for sale
+  soldDate        DateTime? // Date when item was sold
+  soldYear        Int?      // Year when item was sold for aggregation
+  soldMonth       Int?      // Month (1-12) when item was sold for aggregation
+  priceCents      Int?      // Sale price in cents when sold
   currentStatus   ItemStatus @default(INTAKE)
   currentLocation String?   @db.VarChar(20)
   lotNumber       Int?      // Items in the same lot share the same lot number
@@ -62,6 +67,7 @@ model Item {
   statusHistory     ItemStatusHistory[]
   listings          Listing[]
   orderLines        OrderLine[]
+  cogsRecords       COGSRecord[]
 
   // Performance indexes for scale
   @@index([lotNumber])           // Fast lot queries
@@ -70,6 +76,8 @@ model Item {
   @@index([currentLocation])     // Fast location filtering
   @@index([currentStatus, currentLocation]) // Combined filters
   @@index([createdAt])           // Fast ordering by creation date
+  @@index([soldDate])            // Fast sales date filtering
+  @@index([soldYear, soldMonth]) // Fast sales reporting aggregation
   @@map("items")
 }
 
@@ -125,4 +133,38 @@ model OrderLine {
   item  Item  @relation(fields: [itemId], references: [id])
 
   @@map("order_lines")
+}
+
+model COGRecord {
+  id            Int      @id @default(autoincrement())
+  recordDate    DateTime @default(now())
+  startDate     DateTime
+  endDate       DateTime
+  totalAmount   Float
+  itemsUpdated  Int
+  averagePerItem Float
+  createdAt     DateTime @default(now())
+  
+  @@map("cog_records")
+}
+
+model COGSRecord {
+  id            Int      @id @default(autoincrement())
+  itemId        Int      // The item that was sold
+  costCents     Int      // Cost of the item when sold
+  soldDate      DateTime // When the item was marked as sold
+  soldMonth     Int      // Month (1-12) for aggregation
+  soldYear      Int      // Year for aggregation
+  financialYear Int      // Financial year (e.g., 2025 for Jul 2024 - Jun 2025)
+  createdAt     DateTime @default(now())
+  
+  item Item @relation(fields: [itemId], references: [id])
+  
+  // Indexes for efficient reporting queries
+  @@index([soldDate])
+  @@index([soldYear, soldMonth])
+  @@index([financialYear])
+  @@index([itemId])
+  
+  @@map("cogs_records")
 }

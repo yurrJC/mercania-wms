@@ -19,7 +19,8 @@ import {
   AlertTriangle,
   Package2,
   Settings,
-  Edit3
+  Edit3,
+  CheckCircle
 } from 'lucide-react';
 
 interface Item {
@@ -29,6 +30,8 @@ interface Item {
   conditionNotes: string;
   costCents: number;
   intakeDate: string;
+  listedDate?: string | null;
+  soldDate?: string | null;
   currentStatus: string;
   currentLocation: string | null;
   lotNumber: number | null;
@@ -61,7 +64,7 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [lotFilter, setLotFilter] = useState('');
-  const [sortOrder, setSortOrder] = useState(''); // '' = default (lot first), 'id_asc' = ID low to high, 'id_desc' = ID high to low
+  const [sortOrder, setSortOrder] = useState('id_desc'); // 'id_desc' = ID high to low (newest first), 'id_asc' = ID low to high, '' = default (lot first)
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Item | null>(null);
@@ -77,6 +80,27 @@ export default function InventoryPage() {
   const [isDeletingLot, setIsDeletingLot] = useState<number | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdLot, setCreatedLot] = useState<any>(null);
+  const [showCOGModal, setShowCOGModal] = useState(false);
+  const [cogData, setCogData] = useState({
+    startDate: '',
+    endDate: '',
+    totalSpent: ''
+  });
+  const [isProcessingCOG, setIsProcessingCOG] = useState(false);
+  const [cogSuccess, setCogSuccess] = useState<any>(null);
+  
+  // Update Dates functionality
+  const [showUpdateDatesModal, setShowUpdateDatesModal] = useState(false);
+  const [updateDatesStep, setUpdateDatesStep] = useState<'type' | 'items' | 'date' | 'success'>(
+    'type'
+  );
+  const [updateDatesData, setUpdateDatesData] = useState({
+    dateType: '' as 'listed' | 'sold' | '',
+    itemIds: '',
+    date: new Date().toISOString().split('T')[0] // Today's date as default
+  });
+  const [isProcessingDates, setIsProcessingDates] = useState(false);
+  const [updateDatesResult, setUpdateDatesResult] = useState<any>(null);
 
   // Fetch inventory data
   const fetchInventory = async (page = 1, status = '', search = '', lotNumber = '', sort = '') => {
@@ -156,8 +180,38 @@ export default function InventoryPage() {
     setSearchTerm('');
     setStatusFilter('');
     setLotFilter('');
-    setSortOrder('');
+    setSortOrder('id_desc'); // Reset to default sort (newest first)
     setCurrentPage(1);
+  };
+
+  // Export all inventory as CSV (Excel-compatible)
+  const handleExportAll = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter) params.append('status', statusFilter);
+      if (lotFilter) params.append('lotNumber', lotFilter);
+      if (sortOrder) params.append('sort', sortOrder);
+      const trimmedSearch = searchTerm.trim();
+      if (trimmedSearch) {
+        const isNumeric = /^\d+$/.test(trimmedSearch);
+        if (isNumeric && trimmedSearch.length <= 6) params.append('search', trimmedSearch);
+        else params.append('isbn', trimmedSearch);
+      }
+
+      const url = `/api/items/export?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to export');
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `inventory_export_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error('Export error:', err);
+      setError('Failed to export inventory. Please try again.');
+    }
   };
 
   // Format currency
@@ -525,8 +579,8 @@ export default function InventoryPage() {
     switch (status) {
       case 'INTAKE': return 'bg-yellow-100 text-yellow-800';
       case 'STORED': return 'bg-blue-100 text-blue-800';
-      case 'LISTED': return 'bg-green-100 text-green-800';
-      case 'SOLD': return 'bg-gray-100 text-gray-800';
+      case 'LISTED': return 'bg-orange-100 text-orange-800';
+      case 'SOLD': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -732,54 +786,218 @@ export default function InventoryPage() {
     }
   };
 
+  // Handle COG calculation and processing
+  const handleCOGProcessing = async () => {
+    if (!cogData.startDate || !cogData.endDate || !cogData.totalSpent) {
+      setError('Please fill in all COG fields');
+      return;
+    }
+
+    const totalAmount = parseFloat(cogData.totalSpent);
+    if (isNaN(totalAmount) || totalAmount <= 0) {
+      setError('Please enter a valid total amount');
+      return;
+    }
+
+    setIsProcessingCOG(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/cog/calculate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          startDate: cogData.startDate,
+          endDate: cogData.endDate,
+          totalSpent: totalAmount
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process COG calculation');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setCogSuccess({
+          recordDate: new Date().toISOString(),
+          startDate: cogData.startDate,
+          endDate: cogData.endDate,
+          totalAmount: totalAmount,
+          itemsUpdated: result.data.itemsUpdated,
+          averagePerItem: result.data.averagePerItem
+        });
+        
+        // Reset form and close modal
+        setCogData({ startDate: '', endDate: '', totalSpent: '' });
+        setShowCOGModal(false);
+        
+        // Refresh inventory to show updated costs
+        await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
+      } else {
+        throw new Error(result.error || 'Failed to process COG calculation');
+      }
+    } catch (err) {
+      console.error('COG processing error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to process COG calculation');
+    } finally {
+      setIsProcessingCOG(false);
+    }
+  };
+
+  // Reset COG modal
+  const resetCOGModal = () => {
+    setCogData({ startDate: '', endDate: '', totalSpent: '' });
+    setShowCOGModal(false);
+    setError('');
+  };
+
+  // Handle update dates processing
+  const handleUpdateDatesProcessing = async () => {
+    if (!updateDatesData.dateType || !updateDatesData.itemIds.trim() || !updateDatesData.date) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    setIsProcessingDates(true);
+    setError('');
+
+    try {
+      // Parse and validate item IDs
+      const itemIds = updateDatesData.itemIds
+        .split(',')
+        .map(id => parseInt(id.trim()))
+        .filter(id => !isNaN(id) && id > 0);
+
+      if (itemIds.length === 0) {
+        throw new Error('Please enter valid item IDs (e.g. 7, 3, 10)');
+      }
+
+      const response = await fetch('/api/items/update-dates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          itemIds,
+          dateType: updateDatesData.dateType,
+          date: updateDatesData.date
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Failed to update item dates: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setUpdateDatesResult(result.data);
+        setUpdateDatesStep('success');
+        
+        // Refresh inventory to show updated items
+        await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter, sortOrder);
+      } else {
+        throw new Error(result.error || 'Failed to update item dates');
+      }
+    } catch (err) {
+      console.error('Update dates error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update item dates');
+    } finally {
+      setIsProcessingDates(false);
+    }
+  };
+
+  const resetUpdateDatesModal = () => {
+    setShowUpdateDatesModal(false);
+    setUpdateDatesStep('type');
+    setUpdateDatesData({
+      dateType: '',
+      itemIds: '',
+      date: new Date().toISOString().split('T')[0]
+    });
+    setIsProcessingDates(false);
+    setUpdateDatesResult(null);
+    setError('');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Link href="/" className="mr-4">
+        <div className="px-6 sm:px-8 lg:px-10">
+          <div className="flex justify-between items-center h-20">
+            <div className="flex items-center space-x-4">
+              <Link href="/" className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
                 <ArrowLeft className="h-6 w-6 text-gray-600 hover:text-gray-900" />
               </Link>
-              <Package className="h-8 w-8 text-blue-600 mr-3" />
+              <div className="flex items-center space-x-3">
+                <Package className="h-8 w-8 text-blue-600" />
               <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
             </div>
-            <div className="flex items-center space-x-4">
+            </div>
+            <div className="flex items-center space-x-3">
               <Link
                 href="/intake"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
+                className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center"
               >
-                <Plus className="h-4 w-4 inline mr-2" />
+                <Plus className="h-4 w-4 mr-2" />
                 Add New Item
               </Link>
               <button
                 onClick={() => setShowLotModal(true)}
-                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-medium"
+                className="bg-purple-600 text-white px-5 py-2.5 rounded-lg hover:bg-purple-700 font-medium transition-colors flex items-center"
               >
-                <Package2 className="h-4 w-4 inline mr-2" />
+                <Package2 className="h-4 w-4 mr-2" />
                 Create Lot
               </button>
               <button
                 onClick={openManageLotsModal}
-                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 font-medium"
+                className="bg-orange-600 text-white px-5 py-2.5 rounded-lg hover:bg-orange-700 font-medium transition-colors flex items-center"
               >
-                <Settings className="h-4 w-4 inline mr-2" />
+                <Settings className="h-4 w-4 mr-2" />
                 Manage Lots
               </button>
               <button
-                onClick={() => fetchInventory(currentPage, statusFilter, searchTerm, lotFilter)}
-                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
+                onClick={() => setShowCOGModal(true)}
+                className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg hover:bg-indigo-700 font-medium transition-colors flex items-center"
               >
-                <RefreshCw className="h-4 w-4 inline mr-2" />
+                <Settings className="h-4 w-4 mr-2" />
+                COG
+              </button>
+              <button
+                onClick={() => setShowUpdateDatesModal(true)}
+                className="bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 font-medium transition-colors flex items-center"
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Update Dates
+              </button>
+              <button
+                onClick={() => fetchInventory(currentPage, statusFilter, searchTerm, lotFilter)}
+                className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-200 font-medium transition-colors flex items-center"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
+              </button>
+              <button
+                onClick={handleExportAll}
+                className="bg-emerald-600 text-white px-5 py-2.5 rounded-lg hover:bg-emerald-700 font-medium transition-colors flex items-center"
+              >
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+                </svg>
+                Export CSV
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main className="py-6 px-4 sm:px-6 lg:px-8">
         
         {/* Filters and Search */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -862,9 +1080,9 @@ export default function InventoryPage() {
                     onChange={(e) => setSortOrder(e.target.value)}
                     className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Default (Lot first)</option>
+                    <option value="id_desc">ID: High to Low (Default)</option>
                     <option value="id_asc">ID: Low to High</option>
-                    <option value="id_desc">ID: High to Low</option>
+                    <option value="">Lot first</option>
                   </select>
                 </div>
               </div>
@@ -948,37 +1166,43 @@ export default function InventoryPage() {
           <>
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="w-full">
-                <table className="w-full table-fixed divide-y divide-gray-200">
+                <table className="w-full table-auto divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="w-16 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-20 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         ID
                       </th>
-                      <th className="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-80 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Book Details
                       </th>
-                      <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Condition
                       </th>
-                      <th className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         SKU
                       </th>
-                      <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Location
                       </th>
-                      <th className="w-16 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-20 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Lot
                       </th>
-                      <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Cost
                       </th>
-                      <th className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
+                      <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date Intaked
                       </th>
-                      <th className="w-20 px-2 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date Listed
+                      </th>
+                      <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date Sold
+                      </th>
+                      <th className="w-28 px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -986,10 +1210,10 @@ export default function InventoryPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {inventoryData.items.map((item) => (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-2 py-3 whitespace-nowrap text-center">
+                        <td className="px-4 py-3 whitespace-nowrap text-center">
                           <div className="text-sm font-bold text-gray-900">#{item.id}</div>
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="px-4 py-3">
                           <div className="flex items-start space-x-3">
                             <div className="flex-shrink-0">
                               {item.isbnMaster?.imageUrl ? (
@@ -1017,7 +1241,7 @@ export default function InventoryPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-2 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <div className="text-xs font-medium text-gray-900">
                             {item.conditionGrade || 'Not Set'}
                           </div>
@@ -1027,45 +1251,55 @@ export default function InventoryPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-2 py-3 whitespace-nowrap">
-                          <div className="text-xs font-mono font-medium text-gray-900 bg-gray-50 px-1 py-1 rounded text-center">
-                            {generateSKU(item)}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="inline-flex items-center font-mono text-sm font-semibold text-gray-800 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                            <span className="tracking-wide">{generateSKU(item)}</span>
                           </div>
                         </td>
-                        <td className="px-2 py-3 whitespace-nowrap text-center">
+                        <td className="px-4 py-3 whitespace-nowrap text-center">
                           <span className={`inline-flex px-1 py-1 text-xs font-semibold rounded ${getStatusColor(item.currentStatus)}`}>
                             {item.currentStatus.slice(0,3)}
                           </span>
                         </td>
-                        <td className="px-2 py-3 whitespace-nowrap text-center text-xs text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900">
                           {item.currentLocation ? (
                             item.currentLocation
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-2 py-3 whitespace-nowrap text-center text-xs text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900">
                           {item.lotNumber ? (
                             <span className="bg-purple-100 text-purple-800 px-1 py-1 rounded text-xs font-semibold">#{item.lotNumber}</span>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-2 py-3 whitespace-nowrap text-center text-xs text-gray-900">
-                          {formatCurrency(item.costCents)}
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900">
+                            {formatCurrency(item.costCents)}
                         </td>
-                        <td className="px-2 py-3 whitespace-nowrap text-center text-xs text-gray-500">
-                          {formatDate(item.intakeDate)}
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500">
+                            {formatDate(item.intakeDate)}
                         </td>
-                        <td className="px-2 py-3 whitespace-nowrap text-right text-xs font-medium">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500">
+                          {item.listedDate ? formatDate(item.listedDate) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500">
+                          {item.soldDate ? formatDate(item.soldDate) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-medium">
                           <div className="flex items-center justify-end space-x-1">
-                            <button
+                          <button
                               onClick={() => handleViewItem(item)}
                               className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
                               title="View details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
                             <button
                               onClick={() => setShowDeleteConfirm(item)}
                               className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
@@ -1257,6 +1491,20 @@ export default function InventoryPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Intake Date</label>
                       <p className="text-gray-900">{formatDate(selectedItem.intakeDate)}</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Listed Date</label>
+                      <p className="text-gray-900">
+                        {selectedItem.listedDate ? formatDate(selectedItem.listedDate) : 'Not listed yet'}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Sold Date</label>
+                      <p className="text-gray-900">
+                        {selectedItem.soldDate ? formatDate(selectedItem.soldDate) : 'Not sold yet'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1795,6 +2043,422 @@ export default function InventoryPage() {
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* COG (Cost of Goods) Modal */}
+        {showCOGModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="flex justify-between items-center p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">Cost of Goods Calculation</h2>
+                <button
+                  onClick={resetCOGModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Start Intake Date
+                    </label>
+                    <input
+                      type="date"
+                      value={cogData.startDate}
+                      onChange={(e) => setCogData(prev => ({ ...prev, startDate: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={isProcessingCOG}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      End Intake Date
+                    </label>
+                    <input
+                      type="date"
+                      value={cogData.endDate}
+                      onChange={(e) => setCogData(prev => ({ ...prev, endDate: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={isProcessingCOG}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Total Amount Spent ($)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={cogData.totalSpent}
+                      onChange={(e) => setCogData(prev => ({ ...prev, totalSpent: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={isProcessingCOG}
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                  <div className="flex items-center">
+                    <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium">Average Cost Calculation</p>
+                      <p>The total amount will be divided equally among all items within the date range.</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    onClick={resetCOGModal}
+                    disabled={isProcessingCOG}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCOGProcessing}
+                    disabled={isProcessingCOG || !cogData.startDate || !cogData.endDate || !cogData.totalSpent}
+                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    {isProcessingCOG ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Calculate COG
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* COG Success Modal */}
+        {cogSuccess && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="p-6">
+                <div className="flex items-center mb-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    </div>
+                  </div>
+                  <div className="ml-4">
+                    <h3 className="text-lg font-medium text-gray-900">COG Updated Successfully!</h3>
+                    <p className="text-sm text-gray-500">Cost of goods has been calculated and applied.</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Date Range:</span>
+                      <span className="text-gray-900">
+                        {formatDate(cogSuccess.startDate)} - {formatDate(cogSuccess.endDate)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Total Amount:</span>
+                      <span className="text-gray-900">${cogSuccess.totalAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Items Updated:</span>
+                      <span className="text-gray-900">{cogSuccess.itemsUpdated} items</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-600">Average per Item:</span>
+                      <span className="text-lg font-bold text-green-600">
+                        ${cogSuccess.averagePerItem.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link
+                    href="/reporting"
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    View Reports
+                  </Link>
+                  <button
+                    onClick={() => setCogSuccess(null)}
+                    className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Update Dates Modal */}
+        {showUpdateDatesModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+              <div className="flex justify-between items-center p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {updateDatesStep === 'type' && 'Update Item Dates'}
+                  {updateDatesStep === 'items' && 'Enter Item IDs'}
+                  {updateDatesStep === 'date' && 'Select Date'}
+                  {updateDatesStep === 'success' && 'Update Complete'}
+                </h2>
+                <button
+                  onClick={resetUpdateDatesModal}
+                  className="text-gray-400 hover:text-gray-600"
+                  disabled={isProcessingDates}
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              {/* Step 1: Date Type Selection */}
+              {updateDatesStep === 'type' && (
+                <div className="p-6">
+                  <p className="text-gray-600 mb-6">
+                    Are you entering a Listed Date or Sold Date for items?
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => {
+                        setUpdateDatesData(prev => ({ ...prev, dateType: 'listed' }));
+                        setUpdateDatesStep('items');
+                      }}
+                      className="w-full p-4 text-left border-2 border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 bg-orange-100 rounded-full mr-3 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">Listed Date</div>
+                          <div className="text-sm text-gray-500">Items being marked as listed</div>
+                        </div>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setUpdateDatesData(prev => ({ ...prev, dateType: 'sold' }));
+                        setUpdateDatesStep('items');
+                      }}
+                      className="w-full p-4 text-left border-2 border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 bg-green-100 rounded-full mr-3 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">Sold Date</div>
+                          <div className="text-sm text-gray-500">Items being marked as sold</div>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Item IDs Input */}
+              {updateDatesStep === 'items' && (
+                <div className="p-6">
+                  <div className="mb-4">
+                    <div className="flex items-center mb-2">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded ${
+                        updateDatesData.dateType === 'listed' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {updateDatesData.dateType === 'listed' ? 'Listed Date' : 'Sold Date'}
+                      </span>
+                    </div>
+                    <p className="text-gray-600">
+                      Enter the item IDs separated by commas
+                    </p>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Item IDs (e.g. 7, 3, 10)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="7, 3, 10"
+                      value={updateDatesData.itemIds}
+                      onChange={(e) => setUpdateDatesData(prev => ({ ...prev, itemIds: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-start">
+                      <svg className="h-5 w-5 text-blue-600 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      <div className="text-sm text-blue-800">
+                        <p className="font-medium">Example: 7, 3, 10</p>
+                        <p>Enter multiple item IDs separated by commas. Spaces are optional.</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between space-x-3">
+                    <button
+                      onClick={() => setUpdateDatesStep('type')}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={() => setUpdateDatesStep('date')}
+                      disabled={!updateDatesData.itemIds.trim()}
+                      className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Date Selection */}
+              {updateDatesStep === 'date' && (
+                <div className="p-6">
+                  <div className="mb-4">
+                    <div className="flex items-center mb-2 space-x-2">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded ${
+                        updateDatesData.dateType === 'listed' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {updateDatesData.dateType === 'listed' ? 'Listed Date' : 'Sold Date'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        Items: {updateDatesData.itemIds}
+                      </span>
+                    </div>
+                    <p className="text-gray-600">
+                      Select the {updateDatesData.dateType} date for these items
+                    </p>
+                  </div>
+                  
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {updateDatesData.dateType === 'listed' ? 'Listed' : 'Sold'} Date
+                    </label>
+                    <input
+                      type="date"
+                      value={updateDatesData.date}
+                      onChange={(e) => setUpdateDatesData(prev => ({ ...prev, date: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                      <p className="text-sm text-red-800">{error}</p>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between space-x-3">
+                    <button
+                      onClick={() => {
+                        setUpdateDatesStep('items');
+                        setError('');
+                      }}
+                      disabled={isProcessingDates}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleUpdateDatesProcessing}
+                      disabled={isProcessingDates || !updateDatesData.date}
+                      className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    >
+                      {isProcessingDates ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Update Dates
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Success */}
+              {updateDatesStep === 'success' && updateDatesResult && (
+                <div className="p-6">
+                  <div className="flex items-center mb-4">
+                    <div className="flex-shrink-0">
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <h3 className="text-lg font-medium text-gray-900">Dates Updated Successfully!</h3>
+                      <p className="text-sm text-gray-500">
+                        {updateDatesResult.itemsUpdated} items have been updated.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Date Type:</span>
+                        <span className={`px-2 py-1 text-xs font-medium rounded ${
+                          updateDatesData.dateType === 'listed' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+                        }`}>
+                          {updateDatesData.dateType === 'listed' ? 'Listed Date' : 'Sold Date'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Date Set:</span>
+                        <span className="text-gray-900">{formatDate(updateDatesData.date)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Items Updated:</span>
+                        <span className="text-gray-900">{updateDatesResult.itemsUpdated} items</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">Status Changes:</span>
+                        <span className="text-gray-900">{updateDatesResult.statusChanges} items</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={resetUpdateDatesModal}
+                    className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

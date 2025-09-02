@@ -180,6 +180,46 @@ router.get('/inventory-summary', async (req, res) => {
   }
 });
 
+// GET /reports/inventory-by-location - STORED + LISTED inventory counts by location (alphabetical)
+router.get('/inventory-by-location', async (req, res) => {
+  try {
+    // Only show items with STORED or LISTED status
+    const whereClause = {
+      currentLocation: { not: null },
+      currentStatus: { in: ['STORED', 'LISTED'] as any },
+    };
+
+    const items = await prisma.item.findMany({
+      where: whereClause,
+      select: { currentLocation: true },
+    });
+
+    const counts: Record<string, number> = {};
+    for (const it of items) {
+      const loc = it.currentLocation?.trim();
+      if (!loc) continue;
+      counts[loc] = (counts[loc] || 0) + 1;
+    }
+
+    const locations = Object.entries(counts)
+      .map(([location, count]) => ({ location, count }))
+      .sort((a, b) => a.location.localeCompare(b.location));
+
+    res.set('Cache-Control', 'public, max-age=120');
+    res.json({
+      success: true,
+      data: {
+        locations,
+        totalItems: locations.reduce((sum, l) => sum + l.count, 0),
+        lastUpdated: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Inventory by location error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // GET /reports/aging-stock - Items that have been in STORED status for a long time
 router.get('/aging-stock', async (req, res) => {
   try {

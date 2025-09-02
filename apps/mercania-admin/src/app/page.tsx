@@ -10,7 +10,8 @@ import {
   Plus,
   TrendingUp,
   DollarSign,
-  MapPin
+  MapPin,
+  FileText
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -85,6 +86,10 @@ export default function Dashboard() {
             <Link href="/listing-helper" className="flex items-center px-3 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent">
               <BarChart3 className="h-4 w-4 mr-2" />
               Listing Helper
+            </Link>
+            <Link href="/reporting" className="flex items-center px-3 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent">
+              <FileText className="h-4 w-4 mr-2" />
+              Reporting
             </Link>
           </div>
         </div>
@@ -186,10 +191,10 @@ export default function Dashboard() {
                 <BarChart3 className="h-4 w-4 mr-3 text-blue-600" />
                 Listing Helper
               </Link>
-              <div className="flex items-center p-3 text-sm font-medium text-gray-400 bg-gray-50 rounded-lg">
-                <TrendingUp className="h-4 w-4 mr-3 text-gray-400" />
-                View Reports (Coming Soon)
-              </div>
+              <Link href="/reporting" className="flex items-center p-3 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <TrendingUp className="h-4 w-4 mr-3 text-blue-600" />
+                View Reports
+              </Link>
             </div>
           </div>
         </div>
