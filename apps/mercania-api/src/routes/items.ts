@@ -78,7 +78,7 @@ router.put('/:id/putaway', async (req, res) => {
       }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Item putaway successful',
       data: updatedItem
@@ -94,7 +94,7 @@ router.put('/:id/putaway', async (req, res) => {
     }
 
     console.error('Putaway error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -105,7 +105,7 @@ router.put('/:id/putaway', async (req, res) => {
 router.get('/export', async (req, res) => {
   try {
     // Accept same filters as list endpoint, but no pagination
-    const { status, location, lotNumber, sort, search, isbn, barcode } = req.query as Record<string, string>;
+    const { status, location, lotNumber, sort, search, isbn, barcode, title } = req.query as Record<string, string>;
 
     const where: any = {};
     if (status) where.currentStatus = status;
@@ -115,10 +115,29 @@ router.get('/export', async (req, res) => {
       if (!isNaN(lotNum)) where.lotNumber = lotNum;
     }
     const barcodeValue = barcode || isbn;
-    if (barcodeValue) where.isbn = String(barcodeValue).trim();
+    if (barcodeValue) {
+      const barcodeStr = String(barcodeValue).trim();
+      if (barcodeStr.length > 0) {
+        where.isbn = {
+          contains: barcodeStr,
+          mode: 'insensitive'
+        };
+      }
+    }
     if (search) {
       const id = parseInt(search);
       if (!isNaN(id)) where.id = id;
+    }
+    if (title) {
+      const titleStr = String(title).trim();
+      if (titleStr.length > 0) {
+        where.isbnMaster = {
+          title: {
+            contains: titleStr,
+            mode: 'insensitive'
+          }
+        };
+      }
     }
 
     const orderBy: any[] = [];
@@ -162,7 +181,7 @@ router.get('/export', async (req, res) => {
     res.send('\uFEFF' + csv);
   } catch (error) {
     console.error('Export error:', error);
-    res.status(500).json({ success: false, error: 'Failed to export inventory' });
+    return res.status(500).json({ success: false, error: 'Failed to export inventory' });
   }
 });
 
@@ -228,7 +247,7 @@ router.post('/:id/list', async (req, res) => {
       }
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: 'Listing created successfully',
       data: {
@@ -248,7 +267,7 @@ router.post('/:id/list', async (req, res) => {
     }
 
     console.error('Listing error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -300,7 +319,7 @@ router.put('/:id/status', async (req, res) => {
       }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Status updated successfully',
       data: updatedItem
@@ -316,7 +335,7 @@ router.put('/:id/status', async (req, res) => {
     }
 
     console.error('Status change error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -387,7 +406,7 @@ router.get('/putaway-activity', async (req, res) => {
     });
 
     res.set('Cache-Control', 'public, max-age=60'); // Cache for 1 minute
-    res.json({
+    return res.json({
       success: true,
       data: transformedActivities,
       meta: {
@@ -399,7 +418,7 @@ router.get('/putaway-activity', async (req, res) => {
 
   } catch (error) {
     console.error('Putaway activity fetch error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -567,7 +586,7 @@ router.get('/putaway-activity/pdf', async (req, res) => {
 
   } catch (error) {
     console.error('PDF generation error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to generate PDF report'
     });
@@ -673,7 +692,7 @@ router.post('/putaway-activity/pdf', async (req, res) => {
     doc.end();
   } catch (error) {
     console.error('Session PDF generation error:', error);
-    res.status(500).json({ success: false, error: 'Failed to generate session PDF' });
+    return res.status(500).json({ success: false, error: 'Failed to generate session PDF' });
   }
 });
 
@@ -712,14 +731,14 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: item
     });
 
   } catch (error) {
     console.error('Get item error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -729,7 +748,7 @@ router.get('/:id', async (req, res) => {
 // GET /items - List items with filters
 router.get('/', async (req, res) => {
   try {
-    const { status, location, isbn, barcode, search, lotNumber, sort, page = '1', limit = '50' } = req.query;
+    const { status, location, isbn, barcode, search, title, lotNumber, sort, page = '1', limit = '50' } = req.query;
     
     const pageNum = parseInt(page as string) || 1;
     const limitNum = Math.min(parseInt(limit as string) || 50, 100); // Max 100 items per page
@@ -801,11 +820,40 @@ router.get('/', async (req, res) => {
     const barcodeValue = barcode || isbn; // Support both 'barcode' and 'isbn' parameters
     if (barcodeValue) {
       const barcodeStr = String(barcodeValue).trim();
-      // Allow real barcodes (10+ digits) or internal identifiers (MC/MD/MB prefix)
-      if (barcodeStr.length >= 10 || /^M[BCD]\d+$/.test(barcodeStr)) {
-        where.isbn = barcodeStr; // Note: Still using 'isbn' field in database for now
+      // Allow any non-empty barcode search - use contains for partial matches
+      if (barcodeStr.length > 0) {
+        where.isbn = {
+          contains: barcodeStr,
+          mode: 'insensitive'
+        };
         cacheKey += `_barcode_${barcodeStr}`;
-        cacheDuration = 3600; // 1 hour - barcode data is very stable
+        cacheDuration = 1800; // 30 minutes - partial searches are less stable
+      }
+    }
+    
+    // Title search - search in isbnMaster.title
+    if (title) {
+      const titleStr = String(title).trim();
+      if (titleStr.length > 0) {
+        // If we already have isbnMaster conditions, we need to combine them
+        if (where.isbnMaster) {
+          where.isbnMaster = {
+            ...where.isbnMaster,
+            title: {
+              contains: titleStr,
+              mode: 'insensitive' // Case-insensitive search
+            }
+          };
+        } else {
+          where.isbnMaster = {
+            title: {
+              contains: titleStr,
+              mode: 'insensitive' // Case-insensitive search
+            }
+          };
+        }
+        cacheKey += `_title_${titleStr.toLowerCase()}`;
+        cacheDuration = 1800; // 30 minutes - title searches are relatively stable
       }
     }
     
@@ -874,7 +922,7 @@ router.get('/', async (req, res) => {
           const barcodeValue = barcode || isbn;
           if (barcodeValue) {
             const barcodeStr = String(barcodeValue).trim();
-            if (barcodeStr.length >= 10 || /^M[BCD]\d+$/.test(barcodeStr)) {
+            if (barcodeStr.length > 0) {
               console.log(`Barcode search for ${barcodeStr}: Using first-copy priority (ORDER BY id ASC)`);
               return [{ id: 'asc' }]; // Oldest copy first for barcode searches
             }
@@ -924,7 +972,7 @@ router.get('/', async (req, res) => {
     
     console.log(`Items API - Query completed in ${queryTime}ms, returned ${items.length}/${total} items`);
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         items,
@@ -947,7 +995,7 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     console.error('List items error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -968,7 +1016,15 @@ router.get('/export', async (req, res) => {
       if (!isNaN(lotNum)) where.lotNumber = lotNum;
     }
     const barcodeValue = barcode || isbn;
-    if (barcodeValue) where.isbn = String(barcodeValue).trim();
+    if (barcodeValue) {
+      const barcodeStr = String(barcodeValue).trim();
+      if (barcodeStr.length > 0) {
+        where.isbn = {
+          contains: barcodeStr,
+          mode: 'insensitive'
+        };
+      }
+    }
     if (search) {
       const id = parseInt(search);
       if (!isNaN(id)) where.id = id;
@@ -1022,7 +1078,7 @@ router.get('/export', async (req, res) => {
     res.send('\uFEFF' + csv); // UTF-8 BOM for Excel
   } catch (error) {
     console.error('Export error:', error);
-    res.status(500).json({ success: false, error: 'Failed to export inventory' });
+    return res.status(500).json({ success: false, error: 'Failed to export inventory' });
   }
 });
 
@@ -1086,14 +1142,14 @@ router.delete('/:id', async (req, res) => {
       where: { id: itemId }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Item deleted successfully'
     });
 
   } catch (error) {
     console.error('Delete item error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -1190,7 +1246,7 @@ router.patch('/:id', async (req, res) => {
         const statusHistoryData = itemsToUpdate.map(id => ({
           itemId: id,
           fromStatus: existingItem.currentStatus,
-          toStatus: 'STORED',
+          toStatus: 'STORED' as any,
           channel: 'PUTAWAY',
           note: lotWideUpdate 
             ? `Lot-wide location assigned: ${currentLocation} - Status auto-updated to STORED (Lot #${existingItem.lotNumber})`
@@ -1205,7 +1261,7 @@ router.patch('/:id', async (req, res) => {
         const statusHistoryData = itemsToUpdate.map(id => ({
           itemId: id,
           fromStatus: existingItem.currentStatus,
-          toStatus: currentStatus || existingItem.currentStatus,
+          toStatus: (currentStatus || existingItem.currentStatus) as any,
           channel: 'PUTAWAY',
           note: lotWideUpdate
             ? `Lot-wide location update to ${currentLocation} (Lot #${existingItem.lotNumber})`
@@ -1218,7 +1274,7 @@ router.patch('/:id', async (req, res) => {
       }
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedItem,
       itemsUpdated: updateResult.count,
@@ -1231,7 +1287,7 @@ router.patch('/:id', async (req, res) => {
 
   } catch (error) {
     console.error('Update item error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -1315,7 +1371,7 @@ router.patch('/bulk-location', async (req, res) => {
 
     await Promise.all(statusHistoryPromises);
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         updatedCount: existingItems.length,
@@ -1327,7 +1383,7 @@ router.patch('/bulk-location', async (req, res) => {
 
   } catch (error) {
     console.error('Bulk update location error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -1474,7 +1530,7 @@ router.post('/update-dates', async (req, res): Promise<any> => {
         .map(item => ({
           itemId: item.id,
           fromStatus: item.currentStatus,
-          toStatus: newStatus,
+          toStatus: newStatus as any,
           changedAt: new Date(),
           note: item.lotNumber 
             ? `${dateType} date updated via lot-wide update (Lot #${item.lotNumber})`
@@ -1511,7 +1567,7 @@ router.post('/update-dates', async (req, res): Promise<any> => {
       console.log(`COGS tracking: Processed ${allAffectedItemIds.length} sold items for COGS recording`);
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         itemsUpdated: updateResult.count,
@@ -1530,7 +1586,7 @@ router.post('/update-dates', async (req, res): Promise<any> => {
 
   } catch (error) {
     console.error('Update dates error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error during date update',
       details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined

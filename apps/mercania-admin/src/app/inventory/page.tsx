@@ -61,7 +61,9 @@ export default function InventoryPage() {
   const [inventoryData, setInventoryData] = useState<InventoryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [titleSearch, setTitleSearch] = useState('');
+  const [isbnSearch, setIsbnSearch] = useState('');
+  const [idSearch, setIdSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [lotFilter, setLotFilter] = useState('');
   const [sortOrder, setSortOrder] = useState('id_desc'); // 'id_desc' = ID high to low (newest first), 'id_asc' = ID low to high, '' = default (lot first)
@@ -103,7 +105,7 @@ export default function InventoryPage() {
   const [updateDatesResult, setUpdateDatesResult] = useState<any>(null);
 
   // Fetch inventory data
-  const fetchInventory = async (page = 1, status = '', search = '', lotNumber = '', sort = '') => {
+  const fetchInventory = async (page = 1, status = '', title = '', isbn = '', id = '', lotNumber = '', sort = '') => {
     setIsLoading(true);
     setError('');
     
@@ -115,19 +117,10 @@ export default function InventoryPage() {
       if (lotNumber) params.append('lotNumber', lotNumber);
       if (sort) params.append('sort', sort);
       
-      // Smart search: determine if it's an ID or ISBN
-      if (search) {
-        const trimmedSearch = search.trim();
-        const isNumeric = /^\d+$/.test(trimmedSearch);
-        
-        if (isNumeric && trimmedSearch.length <= 6) {
-          // It's a short number (1-6 digits), likely an internal ID
-          params.append('search', trimmedSearch);
-        } else {
-          // It's either non-numeric or a long number (likely ISBN) - use isbn parameter
-          params.append('isbn', trimmedSearch);
-        }
-      }
+      // Add separate search parameters
+      if (title.trim()) params.append('title', title.trim());
+      if (isbn.trim()) params.append('isbn', isbn.trim());
+      if (id.trim()) params.append('search', id.trim());
 
       const response = await fetch(`/api/items?${params.toString()}`);
       
@@ -151,16 +144,40 @@ export default function InventoryPage() {
     }
   };
 
-  // Load data on mount and when filters change
+  // Load data on mount and when non-search filters change
   useEffect(() => {
-    fetchInventory(currentPage, statusFilter, searchTerm, lotFilter, sortOrder);
-  }, [currentPage, statusFilter, searchTerm, lotFilter, sortOrder]);
+    fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
+  }, [currentPage, statusFilter, sortOrder]);
 
   // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
-    fetchInventory(1, statusFilter, searchTerm, lotFilter, sortOrder);
+    fetchInventory(1, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
+  };
+
+  // Handle individual search field changes
+  const handleTitleSearch = () => {
+    setCurrentPage(1);
+    fetchInventory(1, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
+  };
+
+  const handleIsbnSearch = () => {
+    setCurrentPage(1);
+    fetchInventory(1, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
+  };
+
+  const handleIdSearch = () => {
+    setCurrentPage(1);
+    fetchInventory(1, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
+  };
+
+  // Handle Enter key press in search fields
+  const handleKeyPress = (e: React.KeyboardEvent, searchFunction: () => void) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchFunction();
+    }
   };
 
   // Handle status filter change
@@ -170,14 +187,16 @@ export default function InventoryPage() {
   };
 
   // Handle lot filter change
-  const handleLotFilter = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLotFilter = () => {
     setCurrentPage(1);
+    fetchInventory(1, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
   };
 
   // Clear all filters
   const handleClearFilters = () => {
-    setSearchTerm('');
+    setTitleSearch('');
+    setIsbnSearch('');
+    setIdSearch('');
     setStatusFilter('');
     setLotFilter('');
     setSortOrder('id_desc'); // Reset to default sort (newest first)
@@ -191,12 +210,9 @@ export default function InventoryPage() {
       if (statusFilter) params.append('status', statusFilter);
       if (lotFilter) params.append('lotNumber', lotFilter);
       if (sortOrder) params.append('sort', sortOrder);
-      const trimmedSearch = searchTerm.trim();
-      if (trimmedSearch) {
-        const isNumeric = /^\d+$/.test(trimmedSearch);
-        if (isNumeric && trimmedSearch.length <= 6) params.append('search', trimmedSearch);
-        else params.append('isbn', trimmedSearch);
-      }
+      if (titleSearch.trim()) params.append('title', titleSearch.trim());
+      if (isbnSearch.trim()) params.append('isbn', isbnSearch.trim());
+      if (idSearch.trim()) params.append('search', idSearch.trim());
 
       const url = `/api/items/export?${params.toString()}`;
       const res = await fetch(url);
@@ -420,7 +436,7 @@ export default function InventoryPage() {
     setShowManageLotsModal(true);
     await fetchAllLots();
     // Also refresh inventory to ensure consistency
-    await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
+    await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
   };
 
   // Delete entire lot
@@ -454,7 +470,7 @@ export default function InventoryPage() {
       if (!response.ok) {
         // If deletion failed, revert the optimistic updates
         await fetchAllLots();
-        await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
+        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
         
         const errorResult = await response.json();
         setError(errorResult.error || `Failed to delete lot (${response.status})`);
@@ -466,7 +482,7 @@ export default function InventoryPage() {
       if (!result.success) {
         // If deletion failed, revert the optimistic updates
         await fetchAllLots();
-        await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
+        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
         setError(result.error || 'Failed to delete lot');
       }
       // If successful, the optimistic updates are already applied - no need for additional API calls
@@ -474,7 +490,7 @@ export default function InventoryPage() {
       console.error('Delete lot error:', err);
       // If deletion failed, revert the optimistic updates
       await fetchAllLots();
-      await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
+      await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
       setError('Failed to delete lot');
     } finally {
       setIsDeletingLot(null);
@@ -778,7 +794,7 @@ export default function InventoryPage() {
         setShowCOGModal(false);
         
         // Refresh inventory to show updated costs
-        await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter);
+        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
       } else {
         throw new Error(result.error || 'Failed to process COG calculation');
       }
@@ -842,7 +858,7 @@ export default function InventoryPage() {
         setUpdateDatesStep('success');
         
         // Refresh inventory to show updated items
-        await fetchInventory(currentPage, statusFilter, searchTerm, lotFilter, sortOrder);
+        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
       } else {
         throw new Error(result.error || 'Failed to update item dates');
       }
@@ -919,7 +935,7 @@ export default function InventoryPage() {
                 Update Dates
               </button>
               <button
-                onClick={() => fetchInventory(currentPage, statusFilter, searchTerm, lotFilter)}
+                onClick={() => fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter)}
                 className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-200 font-medium transition-colors flex items-center"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -945,30 +961,91 @@ export default function InventoryPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="space-y-4">
             {/* Search Row */}
-            <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             
-              {/* Item Search */}
-            <form onSubmit={handleSearch} className="flex-1 max-w-md">
+              {/* Title Search */}
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Search Items
+                  Search by Title
                 </label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-400" />
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by ID or ISBN..."
+                    value={titleSearch}
+                    onChange={(e) => setTitleSearch(e.target.value)}
+                    onBlur={handleTitleSearch}
+                    onKeyPress={(e) => handleKeyPress(e, handleTitleSearch)}
+                    placeholder="Enter book title..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Type and click outside to search
+                </p>
+              </div>
+
+              {/* ISBN/Barcode Search */}
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Search by ISBN/Barcode
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-400" />
+                  <input
+                    type="text"
+                    value={isbnSearch}
+                    onChange={(e) => setIsbnSearch(e.target.value)}
+                    onBlur={handleIsbnSearch}
+                    onKeyPress={(e) => handleKeyPress(e, handleIsbnSearch)}
+                    placeholder="Enter ISBN or barcode..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                  Enter item ID (1-6 digits) or ISBN (10-13 digits)
+                  Type and click outside to search
                 </p>
-              </form>
+              </div>
+
+              {/* Internal ID Search */}
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Search by Internal ID
+                </label>
+                <div className="relative">
+                  <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-purple-400" />
+                  <input
+                    type="text"
+                    value={idSearch}
+                    onChange={(e) => setIdSearch(e.target.value)}
+                    onBlur={handleIdSearch}
+                    onKeyPress={(e) => handleKeyPress(e, handleIdSearch)}
+                    placeholder="Enter internal ID..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Type and click outside to search
+                </p>
+              </div>
+            </div>
+
+            {/* Search Button Row */}
+            <div className="flex justify-center">
+              <button
+                onClick={handleSearch}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center"
+              >
+                <Search className="h-4 w-4 mr-2" />
+                Search All
+              </button>
+            </div>
+
+            {/* Second Row - Lot Search and Filters */}
+            <div className="flex flex-col lg:flex-row lg:items-end gap-4">
 
               {/* Lot Search */}
-              <form onSubmit={handleLotFilter} className="flex-1 max-w-md">
+              <div className="flex-1 max-w-md">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Search by Lot
                 </label>
@@ -978,14 +1055,16 @@ export default function InventoryPage() {
                     type="text"
                     value={lotFilter}
                     onChange={(e) => setLotFilter(e.target.value)}
+                    onBlur={handleLotFilter}
+                    onKeyPress={(e) => handleKeyPress(e, handleLotFilter)}
                     placeholder="Enter lot number..."
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Enter lot number (e.g., "1", "23", "456")
+                  Type and click outside to search
               </p>
-            </form>
+              </div>
 
             {/* Status Filter */}
               <div className="flex-shrink-0">
@@ -1031,13 +1110,23 @@ export default function InventoryPage() {
             </div>
 
             {/* Active Filters & Clear Button */}
-            {(searchTerm || statusFilter || lotFilter || sortOrder) && (
+            {(titleSearch || isbnSearch || idSearch || statusFilter || lotFilter || sortOrder) && (
               <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <span className="font-medium">Active filters:</span>
-                  {searchTerm && (
+                  {titleSearch && (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                      Title: {titleSearch}
+                    </span>
+                  )}
+                  {isbnSearch && (
                     <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                      Item: {searchTerm}
+                      ISBN: {isbnSearch}
+                    </span>
+                  )}
+                  {idSearch && (
+                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
+                      ID: {idSearch}
                     </span>
                   )}
                   {lotFilter && (
@@ -1088,7 +1177,7 @@ export default function InventoryPage() {
             <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No Items Found</h3>
             <p className="text-gray-600 mb-6">
-              {searchTerm || statusFilter || lotFilter
+              {titleSearch || isbnSearch || idSearch || statusFilter || lotFilter
                 ? "No items match your current filters." 
                 : "Your inventory is empty. Start by adding some items!"
               }
@@ -1494,38 +1583,16 @@ export default function InventoryPage() {
                   </svg>
                   Reprint the original intake label for this item
                 </div>
-                <div className="space-y-3">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handlePrintIntakeLabel(selectedItem)}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-                      </svg>
-                      Print Intake Label (PDF)
-                    </button>
-                  </div>
-                  
-                  <QZTrayPrinter
-                    labelData={{
-                      internalID: selectedItem.id.toString(),
-                      title: selectedItem.isbnMaster?.title || 'Unknown Item',
-                      author: selectedItem.isbnMaster?.author || 'Unknown',
-                      qty: 1
-                    }}
-                    onPrint={(success) => {
-                      if (success) {
-                        console.log('QZ Tray print successful');
-                      } else {
-                        console.error('QZ Tray print failed');
-                      }
-                    }}
-                    className="border border-gray-200 rounded-lg p-4"
-                  />
-                </div>
-                
                 <div className="flex gap-3">
+                  <button
+                    onClick={() => handlePrintIntakeLabel(selectedItem)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                    </svg>
+                    Print Intake Label
+                  </button>
                   <button
                     onClick={() => setSelectedItem(null)}
                     className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
