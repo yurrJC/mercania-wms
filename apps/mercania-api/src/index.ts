@@ -276,11 +276,11 @@ app.post('/labels', async (req, res) => {
     
     // Set MediaBox and CropBox to exact 80x40mm dimensions
     // This ensures accurate printing dimensions for thermal label printers
-    if (doc._page) {
-      doc._page.mediaBox = [0, 0, widthPoints, heightPoints];
-      doc._page.cropBox = [0, 0, widthPoints, heightPoints];
-      doc._page.bleedBox = [0, 0, widthPoints, heightPoints];
-      doc._page.trimBox = [0, 0, widthPoints, heightPoints];
+    if (doc.page) {
+      (doc.page as any).mediaBox = [0, 0, widthPoints, heightPoints];
+      (doc.page as any).cropBox = [0, 0, widthPoints, heightPoints];
+      (doc.page as any).bleedBox = [0, 0, widthPoints, heightPoints];
+      (doc.page as any).trimBox = [0, 0, widthPoints, heightPoints];
     }
     
     // Set response headers for PDF
@@ -298,11 +298,11 @@ app.post('/labels', async (req, res) => {
       if (i > 0) {
         doc.addPage({ size: [widthPoints, heightPoints], margin: 0, layout: 'portrait' });
         // Set MediaBox and CropBox for additional pages
-        if (doc._page) {
-          doc._page.mediaBox = [0, 0, widthPoints, heightPoints];
-          doc._page.cropBox = [0, 0, widthPoints, heightPoints];
-          doc._page.bleedBox = [0, 0, widthPoints, heightPoints];
-          doc._page.trimBox = [0, 0, widthPoints, heightPoints];
+        if (doc.page) {
+          (doc.page as any).mediaBox = [0, 0, widthPoints, heightPoints];
+          (doc.page as any).cropBox = [0, 0, widthPoints, heightPoints];
+          (doc.page as any).bleedBox = [0, 0, widthPoints, heightPoints];
+          (doc.page as any).trimBox = [0, 0, widthPoints, heightPoints];
         }
       }
 
@@ -424,6 +424,7 @@ app.post('/labels', async (req, res) => {
   }
 });
 
+
 // GET endpoint for easier testing - redirects to POST with sample data
 app.get('/labels', (req, res) => {
   const { internalID, title, qty } = req.query;
@@ -453,6 +454,7 @@ app.get('/labels', (req, res) => {
         <pre>${JSON.stringify(postData, null, 2)}</pre>
         <p>Or test with curl:</p>
         <pre>curl -X POST http://localhost:3001/labels -H "Content-Type: application/json" -d '${JSON.stringify(postData)}' --output test.pdf</pre>
+
       </body>
     </html>
   `);
