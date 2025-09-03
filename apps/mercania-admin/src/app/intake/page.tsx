@@ -154,6 +154,9 @@ export default function IntakePage() {
   const [success, setSuccess] = useState(false);
   const [internalId, setInternalId] = useState<number | null>(null);
   const [showLabelPreview, setShowLabelPreview] = useState(false);
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState<string>('');
+  const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<{
     isDuplicate: boolean;
     message?: string;
@@ -167,6 +170,11 @@ export default function IntakePage() {
   
   const isbnInputRef = useRef<HTMLInputElement>(null);
   const upcInputRef = useRef<HTMLInputElement>(null);
+
+  // Load printers on component mount
+  useEffect(() => {
+    loadPrinters();
+  }, []);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -379,9 +387,79 @@ export default function IntakePage() {
     }
   };
 
-  const handlePrintLabel = () => {
-    setShowLabelPreview(true);
-    console.log('Printing label for:', internalId);
+  // Load available printers
+  const loadPrinters = async () => {
+    setIsLoadingPrinters(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/printers');
+      const data = await response.json();
+      setAvailablePrinters(data.printers || []);
+      if (data.printers && data.printers.length > 0) {
+        setSelectedPrinter(data.printers[0]); // Select first printer by default
+      }
+    } catch (error) {
+      console.error('Error loading printers:', error);
+    } finally {
+      setIsLoadingPrinters(false);
+    }
+  };
+
+  // Print label using original PDF method
+  const handlePrintLabel = async () => {
+    if (!internalId) {
+      alert('No item to print label for');
+      return;
+    }
+
+    try {
+      const itemTitle = bookData?.title || dvdData?.title || cdData?.title || 'Unknown Item';
+      
+      // Use new 80x40mm label endpoint with POST method
+      const response = await fetch('http://localhost:3001/labels', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          internalID: internalId.toString(),
+          title: itemTitle,
+          author: bookData?.author || dvdData?.director || cdData?.artist || 'Unknown',
+          qty: 1
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate label');
+      }
+      
+      const pdfBlob = await response.blob();
+      const url = window.URL.createObjectURL(pdfBlob);
+      
+      // Open PDF in new window for printing
+      const printWindow = window.open(url, '_blank');
+      
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      } else {
+        // Fallback: download the PDF
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `label_${internalId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        alert('PDF label downloaded. Open in Preview and print for best results.');
+      }
+      
+      window.URL.revokeObjectURL(url);
+      setShowLabelPreview(true);
+    } catch (error) {
+      console.error('Error generating label:', error);
+      alert('Error generating label. Please try again.');
+    }
   };
 
   const resetForm = () => {
@@ -706,7 +784,7 @@ export default function IntakePage() {
                   className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium"
                 >
                   <Printer className="h-5 w-5 inline mr-2" />
-                  Print Barcode Label
+                  Print Label (PDF)
                 </button>
               )}
               
@@ -730,14 +808,16 @@ export default function IntakePage() {
 
           {showLabelPreview && (
             <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 mb-6 max-w-md mx-auto">
-              <h3 className="font-bold text-gray-900 mb-4">Label Preview</h3>
-              <div className="text-left space-y-2">
-                <div className="text-4xl font-bold font-mono text-center">{internalId}</div>
-                <div className="border border-gray-400 h-12 bg-black bg-opacity-10 flex items-center justify-center">
-                  <span className="text-xs text-gray-600">||||| |||| ||||| ||||</span>
+              <h3 className="font-bold text-gray-900 mb-4">Label Preview (80mm x 40mm)</h3>
+              <div className="bg-white border border-gray-400 p-3 text-left" style={{ width: '320px', height: '160px' }}>
+                <div className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+                  {bookData?.title || dvdData?.title || cdData?.title || 'Unknown Item'}
                 </div>
-                <div className="text-sm text-gray-600">{new Date().toLocaleDateString()}</div>
-                <div className="text-lg font-bold">MERCANIA</div>
+                <div className="text-sm text-gray-700 mb-2">ID: {internalId}</div>
+                <div className="border border-gray-400 h-8 bg-black bg-opacity-10 flex items-center justify-center mb-2">
+                  <span className="text-xs text-gray-600 font-mono">||||| |||| ||||| ||||</span>
+                </div>
+                <div className="text-xs text-gray-600 font-bold">MERCANIA</div>
               </div>
             </div>
           )}
@@ -949,30 +1029,41 @@ export default function IntakePage() {
                   </div>
                 )}
 
-                <form onSubmit={handleBookSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">ISBN</label>
-                    <input
-                      type="text"
-                        value={formData.isbn}
-                        onChange={(e) => setFormData(prev => ({ ...prev, isbn: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        readOnly={!manualEntry}
-                      />
-                    </div>
-                    
+                {/* Sticky Submit Button - Always Visible */}
+                <div className="sticky top-4 z-10 mb-4">
+                  <button
+                    onClick={handleBookSubmit}
+                    disabled={isLoading || !formData.title.trim()}
+                    className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium shadow-lg"
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Adding...
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center">
+                        <CheckCircle className="h-5 w-5 mr-2" />
+                        Confirm & Add to Inventory
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                <form onSubmit={handleBookSubmit} className="space-y-3">
+                  {/* Essential Fields - Most Important */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                       <input
                         type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                        value={formData.title}
+                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                  
+                        required
+                      />
+                    </div>
+                    
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
                       <input
@@ -984,6 +1075,34 @@ export default function IntakePage() {
                     </div>
                     
                     <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Condition *</label>
+                      <select
+                        value={formData.conditionGrade}
+                        onChange={(e) => setFormData(prev => ({ ...prev, conditionGrade: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="LIKE_NEW">Like New</option>
+                        <option value="GOOD">Good</option>
+                        <option value="ACCEPTABLE">Acceptable</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Secondary Fields - Less Critical */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ISBN</label>
+                      <input
+                        type="text"
+                        value={formData.isbn}
+                        onChange={(e) => setFormData(prev => ({ ...prev, isbn: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        readOnly={!manualEntry}
+                      />
+                    </div>
+                    
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Publisher</label>
                       <input
                         type="text"
@@ -991,10 +1110,10 @@ export default function IntakePage() {
                         onChange={(e) => setFormData(prev => ({ ...prev, publisher: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
-                  </div>
-                  
+                    </div>
+                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Publication Year</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                       <input
                         type="number"
                         value={formData.pubYear || ''}
@@ -1019,21 +1138,8 @@ export default function IntakePage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Condition Grade *</label>
-                      <select
-                        value={formData.conditionGrade}
-                        onChange={(e) => setFormData(prev => ({ ...prev, conditionGrade: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="LIKE_NEW">Like New</option>
-                        <option value="GOOD">Good</option>
-                        <option value="ACCEPTABLE">Acceptable</option>
-                      </select>
-                    </div>
-                    
+                  {/* Cost Field */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Cost (AUD)</label>
                       <div className="relative">
@@ -1049,21 +1155,21 @@ export default function IntakePage() {
                         />
                       </div>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Condition Notes</label>
-                    <textarea
-                      value={formData.conditionNotes}
-                      onChange={(e) => setFormData(prev => ({ ...prev, conditionNotes: e.target.value }))}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Optional notes about the book's condition..."
-                    />
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Condition Notes</label>
+                      <input
+                        type="text"
+                        value={formData.conditionNotes}
+                        onChange={(e) => setFormData(prev => ({ ...prev, conditionNotes: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Optional notes..."
+                      />
+                    </div>
                   </div>
 
                   {duplicateWarning?.isDuplicate && (
-                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <h4 className="font-medium text-yellow-800 mb-2">⚠️ Duplicate Warning</h4>
                       <p className="text-yellow-700 text-sm mb-3">{duplicateWarning.message}</p>
                       {duplicateWarning.existingItems && duplicateWarning.existingItems.length > 0 && (
@@ -1077,16 +1183,6 @@ export default function IntakePage() {
                       )}
                     </div>
                   )}
-
-                  <div className="flex space-x-4">
-                    <button
-                      type="submit"
-                      disabled={isLoading || !formData.title.trim()}
-                      className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
-                    >
-                      {isLoading ? 'Adding Item...' : 'Confirm & Add to Inventory'}
-                    </button>
-                  </div>
                 </form>
               </div>
             )}

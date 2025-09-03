@@ -399,7 +399,7 @@ router.post('/', async (req, res): Promise<any> => {
             binding: itemData.binding
           }
         }),
-        zplTemplate: `/zpl/mercania_item_label.zpl?internalId=${item.id}&intakeDate=${new Date().toISOString().split('T')[0]}`
+        zplTemplate: `/zpl/mercania_item_label.zpl?internalId=${item.id}&itemTitle=${encodeURIComponent(itemData.title)}&intakeDate=${new Date().toISOString().split('T')[0]}`
       }
     });
 

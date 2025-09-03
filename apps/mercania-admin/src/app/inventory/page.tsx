@@ -585,113 +585,55 @@ export default function InventoryPage() {
     }
   };
 
-  // Print intake label for individual item
-  const handlePrintIntakeLabel = (item: Item) => {
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Intake Label #${item.id}</title>
-          <style>
-            @page {
-              size: 3in 2in;
-              margin: 0.1in;
-            }
-            body {
-              font-family: 'Courier New', monospace;
-              margin: 0;
-              padding: 8px;
-              font-size: 14px;
-              line-height: 1.3;
-            }
-            .header {
-              text-align: center;
-              border-bottom: 2px solid #000;
-              padding-bottom: 6px;
-              margin-bottom: 10px;
-            }
-            .internal-id {
-              font-size: 24px;
-              font-weight: bold;
-              text-align: center;
-              margin: 8px 0;
-              border: 2px solid #000;
-              padding: 8px;
-            }
-            .barcode {
-              text-align: center;
-              font-family: 'Libre Barcode 128', monospace;
-              font-size: 32px;
-              margin: 12px 0;
-              letter-spacing: 2px;
-            }
-            .info {
-              margin: 4px 0;
-              font-size: 12px;
-            }
-            .book-title {
-              font-weight: bold;
-              margin: 6px 0;
-              font-size: 11px;
-              line-height: 1.2;
-            }
-            .footer {
-              border-top: 1px solid #000;
-              padding-top: 6px;
-              margin-top: 10px;
-              font-size: 16px;
-              font-weight: bold;
-              text-align: center;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <strong>MERCANIA WMS - INTAKE</strong>
-          </div>
-          
-          <div class="internal-id">
-            #${item.id}
-          </div>
-          
-          <div class="barcode">
-            *${item.id}*
-          </div>
-          
-          <div class="book-title">
-            ${item.isbnMaster?.title || 'Unknown Title'}
-          </div>
-          
-          <div class="info">
-            <strong>ISBN:</strong> ${item.isbn}
-          </div>
-          
-          <div class="info">
-            <strong>Condition:</strong> ${item.conditionGrade || 'Not Set'}
-          </div>
-          
-          <div class="info">
-            <strong>Intake:</strong> ${formatDate(item.intakeDate)}
-          </div>
-          
-          <div class="footer">
-            MERCANIA
-          </div>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.focus();
+  // Print intake label for individual item using new 80x40mm format
+  const handlePrintIntakeLabel = async (item: Item) => {
+    try {
+      const itemTitle = item.isbnMaster?.title || 'Unknown Item';
       
-      // Auto-print after a short delay
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
+      // Use new 80x40mm label endpoint with POST method
+      const response = await fetch('http://localhost:3001/labels', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          internalID: item.id.toString(),
+          title: itemTitle,
+          author: item.isbnMaster?.author || 'Unknown',
+          qty: 1
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate label');
+      }
+      
+      const pdfBlob = await response.blob();
+      const url = window.URL.createObjectURL(pdfBlob);
+      
+      // Open PDF in new window for printing
+      const printWindow = window.open(url, '_blank');
+      
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      } else {
+        // Fallback: download the PDF
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `label_${item.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        alert('PDF label downloaded. Open in Preview and print for best results.');
+      }
+      
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error generating label:', error);
+      alert('Error generating label. Please try again.');
     }
   };
 

@@ -4,6 +4,14 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import PDFDocument from 'pdfkit';
+import JsBarcode from 'jsbarcode';
+import { createCanvas } from 'canvas';
+import bwipjs from 'bwip-js';
 
 // Load environment variables
 dotenv.config();
@@ -13,6 +21,9 @@ const port = process.env.PORT || 3001;
 
 // Initialize Prisma client
 export const prisma = new PrismaClient();
+
+// Promisify exec for async operations
+const execAsync = promisify(exec);
 
 // Middleware
 app.use(helmet());
@@ -24,6 +35,483 @@ app.use(express.urlencoded({ extended: true }));
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// ZPL Label endpoint
+app.get('/zpl/mercania_item_label.zpl', (req, res): void => {
+  try {
+    const { internalId, itemTitle, intakeDate } = req.query;
+    
+    if (!internalId) {
+      res.status(400).json({ error: 'Internal ID is required' });
+      return;
+    }
+
+    // Read the ZPL template (go up two levels from apps/mercania-api to project root)
+    const templatePath = path.join(process.cwd(), '..', '..', 'zpl', 'mercania_item_label.zpl');
+    let zplTemplate = fs.readFileSync(templatePath, 'utf8');
+    
+    // Replace placeholders with actual values
+    zplTemplate = zplTemplate.replace(/{INTERNAL_ID}/g, String(internalId));
+    zplTemplate = zplTemplate.replace(/{ITEM_TITLE}/g, String(itemTitle || 'Unknown Item'));
+    zplTemplate = zplTemplate.replace(/{INTAKE_DATE}/g, String(intakeDate || new Date().toISOString().split('T')[0]));
+    
+    // Set appropriate headers for ZPL
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `inline; filename="label_${internalId}.zpl"`);
+    res.send(zplTemplate);
+  } catch (error) {
+    console.error('Error generating ZPL label:', error);
+    res.status(500).json({ error: 'Failed to generate label', details: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// Get available printers
+app.get('/api/printers', async (req, res) => {
+  try {
+    // Get list of available printers using system commands
+    const { stdout } = await execAsync('lpstat -p 2>/dev/null || echo "No printers found"');
+    const printers = stdout
+      .split('\n')
+      .filter(line => line.includes('printer') && !line.includes('No printers'))
+      .map(line => {
+        const match = line.match(/printer (\S+)/);
+        return match ? match[1] : null;
+      })
+      .filter(Boolean);
+    
+    res.json({ printers });
+  } catch (error) {
+    console.error('Error getting printers:', error);
+    res.status(500).json({ error: 'Failed to get printers', details: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// Generate ZPL label for direct thermal printer printing
+app.get('/api/label-zpl', (req, res) => {
+  try {
+    const { internalId, itemTitle } = req.query;
+    
+    if (!internalId) {
+      res.status(400).json({ error: 'Internal ID is required' });
+      return;
+    }
+
+    // Title (truncated for 80mm width)
+    const title = String(itemTitle || 'Unknown Item');
+    const maxTitleLength = 35; // Good for 80mm width
+    const displayTitle = title.length > maxTitleLength 
+      ? title.substring(0, maxTitleLength) + '...' 
+      : title;
+
+    // Generate ZPL code for 80mm x 40mm label
+    const zpl = `^XA
+^CF0,20
+^FO10,10^FD${displayTitle}^FS
+^CF0,15
+^FO10,35^FDID: ${internalId}^FS
+^BY2,3,50
+^FO10,55^BCN,50,Y,N,N^FD${internalId}^FS
+^CF0,12
+^FO10,110^FDMERCANIA^FS
+^XZ`;
+
+    // Set response headers for ZPL
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `inline; filename="label_${internalId}.zpl"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // Send ZPL directly to response
+    res.send(zpl);
+  } catch (error) {
+    console.error('Error generating ZPL label:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate ZPL label', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
+});
+
+
+
+// Keep PDF endpoint for fallback
+app.get('/api/label-pdf', (req, res) => {
+  try {
+    const { internalId, itemTitle } = req.query;
+    
+    if (!internalId) {
+      res.status(400).json({ error: 'Internal ID is required' });
+      return;
+    }
+
+    // Create PDF document with exact 80mm x 40mm dimensions
+    const doc = new PDFDocument({ 
+      size: [226.77, 113.39], // 80mm x 40mm in points
+      margin: 0,
+      layout: 'landscape' // Force landscape orientation for proper printing
+    });
+    
+    // Set response headers for PDF with browser printing compatibility
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="label_${internalId}.pdf"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // Pipe PDF to response
+    doc.pipe(res);
+    
+    // Generate Code 128 barcode - original working size
+    const canvas = createCanvas(200, 30);
+    JsBarcode(canvas, String(internalId), {
+      format: "CODE128",
+      width: 2,
+      height: 25,
+      displayValue: false,
+      margin: 0
+    });
+    
+    // Convert canvas to buffer
+    const barcodeBuffer = canvas.toBuffer('image/png');
+    
+    // Title (original working truncation)
+    const title = String(itemTitle || 'Unknown Item');
+    const maxTitleLength = 30; // Original working length
+    const displayTitle = title.length > maxTitleLength 
+      ? title.substring(0, maxTitleLength) + '...' 
+      : title;
+    
+    // Background - exact 80mm x 40mm dimensions
+    doc.rect(0, 0, 226.77, 113.39)
+       .fill('#ffffff');
+    
+    // Title with original working font size
+    doc.fontSize(9)
+       .font('Helvetica-Bold')
+       .fillColor('#000000')
+       .text(displayTitle, 8, 8, { 
+         width: 210, 
+         align: 'left',
+         lineGap: 1
+       });
+    
+    // Internal ID with original working styling
+    doc.fontSize(7)
+       .font('Helvetica')
+       .fillColor('#333333')
+       .text(`ID: ${internalId}`, 8, 25, { width: 210, align: 'left' });
+    
+    // Add the barcode image - original working size
+    doc.image(barcodeBuffer, 13, 35, { width: 200, height: 25 });
+    
+    // Barcode number below - original working font
+    doc.fontSize(6)
+       .font('Courier')
+       .fillColor('#000000')
+       .text(String(internalId), 8, 65, { width: 210, align: 'center' });
+    
+    // Mercania branding with original working styling
+    doc.fontSize(7)
+       .font('Helvetica-Bold')
+       .fillColor('#1f2937')
+       .text('MERCANIA', 8, 80, { width: 210, align: 'center' });
+    
+    // Add professional border - original working design
+    doc.rect(2, 2, 222.77, 109.39)
+       .lineWidth(1)
+       .stroke('#e5e7eb');
+    
+    // Add inner border for premium look
+    doc.rect(4, 4, 218.77, 105.39)
+       .lineWidth(0.5)
+       .stroke('#d1d5db');
+    
+    // Finalize PDF
+    doc.end();
+  } catch (error) {
+    console.error('Error generating PDF label:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate PDF label', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
+});
+
+// New multi-page PDF label endpoint with bwip-js - optimized for 80x40mm
+app.post('/labels', async (req, res) => {
+  try {
+    const { internalID, title, author, copyIndex, labelSize, qty } = req.body;
+    
+    // Validate required fields
+    if (!internalID) {
+      res.status(400).json({ error: 'internalID is required' });
+      return;
+    }
+
+    // Set defaults - force 80x40mm for inventory management
+    const quantity = qty || 1;
+    const labelSizeValue = '80x40mm'; // Fixed size for inventory labels
+    const displayTitle = title || 'Unknown Item';
+    const displayAuthor = author || 'Unknown Author';
+    const copyIndexValue = copyIndex || 0;
+
+    // Parse label size (80x40mm)
+    const widthMm = 80;
+    const heightMm = 40;
+    
+    // Convert mm to points (1mm = 2.834645669 points)
+    const widthPoints = widthMm * 2.834645669;  // 226.77 points
+    const heightPoints = heightMm * 2.834645669; // 113.39 points
+    
+    // Exact dimensions: 80mm × 40mm = 226.77 × 113.39 points
+
+    // Create PDF document with proper MediaBox and CropBox for 80x40mm
+    const doc = new PDFDocument({ 
+      size: [widthPoints, heightPoints],
+      margin: 0,
+      layout: 'portrait'
+    });
+    
+    // Set MediaBox and CropBox to exact 80x40mm dimensions
+    // This ensures accurate printing dimensions for thermal label printers
+    if (doc._page) {
+      doc._page.mediaBox = [0, 0, widthPoints, heightPoints];
+      doc._page.cropBox = [0, 0, widthPoints, heightPoints];
+      doc._page.bleedBox = [0, 0, widthPoints, heightPoints];
+      doc._page.trimBox = [0, 0, widthPoints, heightPoints];
+    }
+    
+    // Set response headers for PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="labels_${internalID}.pdf"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Generate labels for each copy
+    for (let i = 0; i < quantity; i++) {
+      if (i > 0) {
+        doc.addPage({ size: [widthPoints, heightPoints], margin: 0, layout: 'portrait' });
+        // Set MediaBox and CropBox for additional pages
+        if (doc._page) {
+          doc._page.mediaBox = [0, 0, widthPoints, heightPoints];
+          doc._page.cropBox = [0, 0, widthPoints, heightPoints];
+          doc._page.bleedBox = [0, 0, widthPoints, heightPoints];
+          doc._page.trimBox = [0, 0, widthPoints, heightPoints];
+        }
+      }
+
+      // Generate Code 128 barcode using bwip-js - optimized for clarity
+      const barcodeOptions = {
+        bcid: 'code128',        // Barcode type
+        text: String(internalID), // Text to encode
+        scale: 2,               // Increased scale for better clarity
+        height: 14,             // Increased height for better scanning
+        includetext: false,     // Don't include text below barcode
+        textxalign: 'center' as const,   // Center text if included
+        quietzones: true,       // Include quiet zones (2-3mm as requested)
+        quietzone: 3,           // Increased quiet zone for better scanning
+        width: 2                // Wider bars for better clarity
+      };
+
+      const barcodeBuffer = await bwipjs.toBuffer(barcodeOptions);
+
+      // Truncate title and author for 80mm width (optimized for readability)
+      const maxTitleLength = 30; // Optimized for 80mm width
+      const maxAuthorLength = 25; // Shorter for author line
+      const truncatedTitle = displayTitle.length > maxTitleLength 
+        ? displayTitle.substring(0, maxTitleLength) + '...' 
+        : displayTitle;
+      const truncatedAuthor = displayAuthor.length > maxAuthorLength 
+        ? displayAuthor.substring(0, maxAuthorLength) + '...' 
+        : displayAuthor;
+
+      // Clean white background
+      doc.rect(0, 0, widthPoints, heightPoints)
+         .fill('#ffffff');
+
+      // 1. TITLE at the top
+      doc.fontSize(8)
+         .font('Helvetica-Bold')
+         .fillColor('#000000')
+         .text(truncatedTitle, 6, 5, { 
+           width: widthPoints - 12, 
+           align: 'left',
+           lineGap: 0.5
+         });
+
+      // 2. AUTHOR just under title
+      doc.fontSize(7)
+         .font('Helvetica')
+         .fillColor('#333333')
+         .text(truncatedAuthor, 6, 18, { 
+           width: widthPoints - 12, 
+           align: 'left' 
+         });
+
+      // 3. INTERNAL ID
+      doc.fontSize(7)
+         .font('Helvetica-Bold')
+         .fillColor('#000000')
+         .text(`ID: ${internalID}`, 6, 30, { width: widthPoints - 12, align: 'left' });
+
+      // 4. BARCODE (Code 128 of internal ID) - perfectly centered between ID and Intake Date
+      const barcodeWidth = Math.min(widthPoints - 16, 140); // Increased width for clarity
+      const barcodeHeight = 16; // Increased height for better scanning
+      const barcodeX = (widthPoints - barcodeWidth) / 2;
+      const barcodeY = 45; // Centered between ID (30) and Intake Date (heightPoints - 15)
+
+      doc.image(barcodeBuffer, barcodeX, barcodeY, { 
+        width: barcodeWidth, 
+        height: barcodeHeight 
+      });
+
+      // 5. INTAKE DATE at the bottom
+      const now = new Date();
+      const intakeDate = now.toLocaleDateString('en-US', { 
+        month: '2-digit', 
+        day: '2-digit', 
+        year: '2-digit' 
+      });
+      
+      doc.fontSize(6)
+         .font('Helvetica')
+         .fillColor('#666666')
+         .text(`Intake: ${intakeDate}`, 6, heightPoints - 15, { 
+           width: widthPoints - 12, 
+           align: 'left' 
+         });
+
+      // MERCANIA branding at the bottom
+      doc.fontSize(6)
+         .font('Helvetica-Bold')
+         .fillColor('#1f2937')
+         .text('MERCANIA', 6, heightPoints - 10, { 
+           width: widthPoints - 12, 
+           align: 'center' 
+         });
+
+      // Copy index if multiple copies
+      if (quantity > 1) {
+        doc.fontSize(5)
+           .font('Helvetica-Bold')
+           .fillColor('#dc2626')
+           .text(`COPY ${copyIndexValue + i + 1}`, 6, heightPoints - 6, { 
+             width: widthPoints - 12, 
+             align: 'right' 
+           });
+      }
+
+      // Clean border
+      doc.rect(1, 1, widthPoints - 2, heightPoints - 2)
+         .lineWidth(0.5)
+         .stroke('#cccccc');
+    }
+
+    // Finalize PDF
+    doc.end();
+  } catch (error) {
+    console.error('Error generating multi-page PDF labels:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate labels', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
+});
+
+// GET endpoint for easier testing - redirects to POST with sample data
+app.get('/labels', (req, res) => {
+  const { internalID, title, qty } = req.query;
+  
+  if (!internalID) {
+    res.status(400).json({ 
+      error: 'internalID is required',
+      usage: 'Use POST /labels with JSON body or GET /labels?internalID=YOUR_ID&title=YOUR_TITLE&qty=1'
+    });
+    return;
+  }
+
+  // Redirect to POST with query parameters
+  const postData = {
+    internalID: String(internalID),
+    title: title ? String(title) : 'Test Item',
+    qty: qty ? parseInt(String(qty)) : 1
+  };
+
+  // Create a simple HTML form for testing
+  res.send(`
+    <html>
+      <head><title>Label Generator Test</title></head>
+      <body>
+        <h2>Label Generator</h2>
+        <p>Use POST /labels with JSON body:</p>
+        <pre>${JSON.stringify(postData, null, 2)}</pre>
+        <p>Or test with curl:</p>
+        <pre>curl -X POST http://localhost:3001/labels -H "Content-Type: application/json" -d '${JSON.stringify(postData)}' --output test.pdf</pre>
+      </body>
+    </html>
+  `);
+});
+
+// Print label directly to USB printer (keeping for compatibility)
+app.post('/api/print-label', async (req, res) => {
+  try {
+    const { internalId, itemTitle, printerName } = req.body;
+    
+    if (!internalId) {
+      res.status(400).json({ error: 'Internal ID is required' });
+      return;
+    }
+
+    // Read the ZPL template
+    const templatePath = path.join(process.cwd(), '..', '..', 'zpl', 'mercania_item_label.zpl');
+    let zplTemplate = fs.readFileSync(templatePath, 'utf8');
+    
+    // Replace placeholders with actual values
+    zplTemplate = zplTemplate.replace(/{INTERNAL_ID}/g, String(internalId));
+    zplTemplate = zplTemplate.replace(/{ITEM_TITLE}/g, String(itemTitle || 'Unknown Item'));
+    zplTemplate = zplTemplate.replace(/{INTAKE_DATE}/g, String(new Date().toISOString().split('T')[0]));
+    
+    // Create temporary file for ZPL
+    const tempFile = path.join(process.cwd(), '..', '..', 'temp_label.zpl');
+    fs.writeFileSync(tempFile, zplTemplate);
+    
+    try {
+      // Print using system command
+      const printCommand = printerName 
+        ? `lp -d "${printerName}" "${tempFile}"`
+        : `lp "${tempFile}"`;
+      
+      const { stdout, stderr } = await execAsync(printCommand);
+      
+      // Clean up temp file
+      fs.unlinkSync(tempFile);
+      
+      res.json({ 
+        success: true, 
+        message: 'Label sent to printer successfully',
+        printer: printerName || 'default',
+        output: stdout 
+      });
+    } catch (printError) {
+      // Clean up temp file even if printing fails
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+      throw printError;
+    }
+  } catch (error) {
+    console.error('Error printing label:', error);
+    res.status(500).json({ 
+      error: 'Failed to print label', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
 });
 
 // API Routes
