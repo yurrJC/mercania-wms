@@ -1,14 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  experimental: {
-    outputFileTracingRoot: require('path').join(__dirname, '../../'),
-  },
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
-  // Enable static exports for better performance
-  trailingSlash: true,
   // Optimize images
   images: {
     unoptimized: true,
