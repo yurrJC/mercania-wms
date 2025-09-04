@@ -4,12 +4,30 @@ import { prisma } from '../index';
 
 const router = Router();
 
-// GET /lots - Get all lots summary (optimized for scale)
+// GET /lots - Get lots summary with pagination (optimized for scale)
 router.get('/', async (req, res) => {
   try {
+    const { page = '1', limit = '20' } = req.query;
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = Math.min(parseInt(limit as string) || 20, 100); // Max 100 lots per page
+    const skip = (pageNum - 1) * limitNum;
+
     // Add caching headers since lot data changes less frequently
     res.set('Cache-Control', 'public, max-age=60'); // 1 minute cache
-    // Use Prisma aggregation for efficient lot counting
+    
+    // Get total count of lots first
+    const totalLots = await prisma.item.groupBy({
+      by: ['lotNumber'],
+      where: {
+        lotNumber: { not: null }
+      },
+      _count: { id: true }
+    });
+
+    const totalCount = totalLots.length;
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    // Use Prisma aggregation for efficient lot counting with pagination
     const lotAggregates = await prisma.item.groupBy({
       by: ['lotNumber'],
       where: {
@@ -17,7 +35,9 @@ router.get('/', async (req, res) => {
       },
       _count: { id: true },
       _min: { createdAt: true },
-      orderBy: { lotNumber: 'desc' }
+      orderBy: { lotNumber: 'desc' },
+      skip,
+      take: limitNum
     });
 
     // Get sample titles for each lot (limit to first 3 unique titles)
@@ -49,7 +69,15 @@ router.get('/', async (req, res) => {
 
     res.json({
       success: true,
-      data: lotSummaries
+      data: lotSummaries,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        pages: totalPages,
+        hasNext: pageNum < totalPages,
+        hasPrev: pageNum > 1
+      }
     });
 
   } catch (error) {

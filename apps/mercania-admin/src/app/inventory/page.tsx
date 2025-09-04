@@ -81,6 +81,11 @@ export default function InventoryPage() {
   const [editingLot, setEditingLot] = useState<any>(null);
   const [isLoadingLots, setIsLoadingLots] = useState(false);
   const [isDeletingLot, setIsDeletingLot] = useState<number | null>(null);
+  
+  // Lot pagination state
+  const [lotCurrentPage, setLotCurrentPage] = useState(1);
+  const [lotTotalPages, setLotTotalPages] = useState(1);
+  const [lotTotalCount, setLotTotalCount] = useState(0);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdLot, setCreatedLot] = useState<any>(null);
   const [showCOGModal, setShowCOGModal] = useState(false);
@@ -412,15 +417,18 @@ export default function InventoryPage() {
     }
   };
 
-  // Fetch all lots
-  const fetchAllLots = async () => {
+  // Fetch lots with pagination
+  const fetchAllLots = async (page = 1) => {
     setIsLoadingLots(true);
     try {
-      const response = await apiCall('http://localhost:3001/api/lots');
+      const response = await apiCall(`http://localhost:3001/api/lots?page=${page}&limit=20`);
       const result = await response.json();
       
       if (result.success) {
         setAllLots(result.data);
+        setLotCurrentPage(result.pagination.page);
+        setLotTotalPages(result.pagination.pages);
+        setLotTotalCount(result.pagination.total);
       } else {
         setError('Failed to load lots');
       }
@@ -435,7 +443,8 @@ export default function InventoryPage() {
   // Open manage lots modal and refresh data
   const openManageLotsModal = async () => {
     setShowManageLotsModal(true);
-    await fetchAllLots();
+    setLotCurrentPage(1); // Reset to first page
+    await fetchAllLots(1);
     // Also refresh inventory to ensure consistency
     await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
   };
@@ -2005,6 +2014,57 @@ export default function InventoryPage() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    
+                    {/* Pagination Controls */}
+                    {lotTotalPages > 1 && (
+                      <div className="mt-6 flex items-center justify-between border-t pt-4">
+                        <div className="flex items-center text-sm text-gray-700">
+                          <span>
+                            Showing {((lotCurrentPage - 1) * 20) + 1} to {Math.min(lotCurrentPage * 20, lotTotalCount)} of {lotTotalCount} lots
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => fetchAllLots(lotCurrentPage - 1)}
+                            disabled={lotCurrentPage === 1 || isLoadingLots}
+                            className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Previous
+                          </button>
+                          
+                          <div className="flex items-center space-x-1">
+                            {Array.from({ length: Math.min(5, lotTotalPages) }, (_, i) => {
+                              const pageNum = Math.max(1, Math.min(lotTotalPages - 4, lotCurrentPage - 2)) + i;
+                              if (pageNum > lotTotalPages) return null;
+                              
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => fetchAllLots(pageNum)}
+                                  disabled={isLoadingLots}
+                                  className={`px-3 py-2 text-sm font-medium rounded-md ${
+                                    pageNum === lotCurrentPage
+                                      ? 'bg-purple-600 text-white'
+                                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          
+                          <button
+                            onClick={() => fetchAllLots(lotCurrentPage + 1)}
+                            disabled={lotCurrentPage === lotTotalPages || isLoadingLots}
+                            className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Next
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -1065,7 +1065,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /items/export - Export full inventory as Excel (XLSX)
+// GET /items/export - Export full inventory as CSV (streaming for large datasets)
 router.get('/export', async (req, res) => {
   try {
     // Reuse existing filters from the list endpoint, but ignore pagination
@@ -1099,7 +1099,36 @@ router.get('/export', async (req, res) => {
     else if (sort === 'id_asc') orderBy.push({ id: 'asc' });
     else orderBy.push({ lotNumber: 'asc' }, { id: 'desc' });
 
-    // Fetch all matching items (no pagination)
+    // Helper function to escape CSV values
+    const escapeCsv = (v: any) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+
+    // Set up streaming response
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="inventory_export_${Date.now()}.csv"`);
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    // Start streaming with UTF-8 BOM for Excel compatibility
+    res.write('\uFEFF');
+    
+    // Write CSV header
+    const header = [
+      'ID','Status','Location','Lot','Listed Date','Sold Date','ISBN','Title','Author','Publisher','Binding','Created'
+    ];
+    res.write(header.map(escapeCsv).join(',') + '\n');
+
+    // Stream items in batches to prevent memory issues
+    const batchSize = 1000; // Process 1000 items at a time
+    let skip = 0;
+    let hasMore = true;
+    let totalProcessed = 0;
+
+    console.log('Starting streaming export...');
+
+    while (hasMore) {
+      // Fetch batch of items
     const items = await prisma.item.findMany({
       where,
       orderBy,
@@ -1107,41 +1136,63 @@ router.get('/export', async (req, res) => {
         isbnMaster: {
           select: { title: true, author: true, publisher: true, binding: true }
         }
+        },
+        skip,
+        take: batchSize
+      });
+
+      // If no more items, we're done
+      if (items.length === 0) {
+        hasMore = false;
+        break;
       }
-    });
 
-    // Build CSV (Excel will open CSV seamlessly) to avoid heavy xlsx deps
-    const header = [
-      'ID','Status','Location','Lot','Listed Date','Sold Date','ISBN','Title','Author','Publisher','Binding','Created'
-    ];
-    const rows = items.map(it => [
-      it.id,
-      it.currentStatus || '',
-      it.currentLocation || '',
-      it.lotNumber ?? '',
-      it.listedDate ? new Date(it.listedDate).toISOString() : '',
-      it.soldDate ? new Date(it.soldDate).toISOString() : '',
-      it.isbn || '',
-      it.isbnMaster?.title || '',
-      it.isbnMaster?.author || '',
-      it.isbnMaster?.publisher || '',
-      it.isbnMaster?.binding || '',
-      it.createdAt.toISOString()
-    ]);
+      // Process and stream this batch
+      for (const item of items) {
+        const row = [
+          item.id,
+          item.currentStatus || '',
+          item.currentLocation || '',
+          item.lotNumber ?? '',
+          item.listedDate ? new Date(item.listedDate).toISOString() : '',
+          item.soldDate ? new Date(item.soldDate).toISOString() : '',
+          item.isbn || '',
+          item.isbnMaster?.title || '',
+          item.isbnMaster?.author || '',
+          item.isbnMaster?.publisher || '',
+          item.isbnMaster?.binding || '',
+          item.createdAt.toISOString()
+        ];
+        
+        res.write(row.map(escapeCsv).join(',') + '\n');
+        totalProcessed++;
+      }
 
-    const escapeCsv = (v: any) => {
-      const s = String(v ?? '');
-      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    };
+      // Update skip for next batch
+      skip += batchSize;
+      
+      // Log progress every 5000 items
+      if (totalProcessed % 5000 === 0) {
+        console.log(`Exported ${totalProcessed} items so far...`);
+      }
 
-    const csv = [header, ...rows].map(r => r.map(escapeCsv).join(',')).join('\n');
+      // If we got fewer items than batch size, we're done
+      if (items.length < batchSize) {
+        hasMore = false;
+      }
+    }
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="inventory_export_${Date.now()}.csv"`);
-    res.send('\uFEFF' + csv); // UTF-8 BOM for Excel
+    console.log(`Streaming export completed. Total items exported: ${totalProcessed}`);
+    res.end();
+
   } catch (error) {
     console.error('Export error:', error);
-    return res.status(500).json({ success: false, error: 'Failed to export inventory' });
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, error: 'Failed to export inventory' });
+    } else {
+      // If we already started streaming, just end the response
+      res.end();
+    }
   }
 });
 
