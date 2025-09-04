@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { 
   BookOpen, 
   Package, 
@@ -95,7 +96,14 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <BookOpen className="h-8 w-8 text-blue-600 mr-3" />
+              <Image
+                src="/mercania2048x2048bluetext copy.png"
+                alt="Mercania Logo"
+                width={40}
+                height={40}
+                className="mr-3"
+                style={{ background: 'transparent' }}
+              />
               <h1 className="text-2xl font-bold text-gray-900">Mercania WMS</h1>
             </div>
             <div className="flex items-center space-x-4">
@@ -153,7 +161,13 @@ export default function Dashboard() {
         {/* Welcome Message */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
           <div className="flex items-center">
-            <BookOpen className="h-8 w-8 text-blue-600 mr-3" />
+            <Image
+              src="/mercania2048x2048bluetext copy.png"
+              alt="Mercania Logo"
+              width={60}
+              height={60}
+              className="rounded-lg mr-4 shadow-sm"
+            />
             <div>
               <h2 className="text-xl font-semibold text-blue-900">Welcome to Mercania WMS! 🎉</h2>
               <p className="text-blue-700 mt-1">Your warehouse management system is now running successfully.</p>

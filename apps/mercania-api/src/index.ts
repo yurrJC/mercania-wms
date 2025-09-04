@@ -134,7 +134,45 @@ app.get('/api/label-zpl', (req, res) => {
   }
 });
 
+// Generate ZPL label for lot printing
+app.get('/api/lot-label-zpl', (req, res) => {
+  try {
+    const { lotNumber, itemCount } = req.query;
+    
+    if (!lotNumber) {
+      res.status(400).json({ error: 'Lot number is required' });
+      return;
+    }
 
+    // Generate ZPL code for 80mm x 40mm lot label
+    const zpl = `^XA
+^CF0,20
+^FO10,10^FDLOT #${lotNumber}^FS
+^CF0,15
+^FO10,35^FDItems: ${itemCount || '0'}^FS
+^BY2,3,50
+^FO10,55^BCN,50,Y,N,N^FDLOT${lotNumber}^FS
+^CF0,12
+^FO10,110^FDMERCANIA^FS
+^XZ`;
+
+    // Set response headers for ZPL
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `inline; filename="lot_label_${lotNumber}.zpl"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // Send ZPL directly to response
+    res.send(zpl);
+  } catch (error) {
+    console.error('Error generating lot ZPL label:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate lot ZPL label', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
+});
 
 // Keep PDF endpoint for fallback
 app.get('/api/label-pdf', (req, res) => {
@@ -335,7 +373,7 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top
+      // 1. TITLE at the top (left-aligned)
       doc.fontSize(8)
          .font('Helvetica-Bold')
          .fillColor('#000000')
@@ -345,7 +383,7 @@ app.post('/labels', async (req, res) => {
            lineGap: 0.5
          });
 
-      // 2. AUTHOR just under title
+      // 2. AUTHOR just under title (left-aligned)
       doc.fontSize(7)
          .font('Helvetica')
          .fillColor('#333333')
@@ -354,8 +392,8 @@ app.post('/labels', async (req, res) => {
            align: 'left' 
          });
 
-      // 3. INTERNAL ID
-      doc.fontSize(7)
+      // 3. INTERNAL ID (left-aligned and bold)
+      doc.fontSize(8)
          .font('Helvetica-Bold')
          .fillColor('#000000')
          .text(`ID: ${internalID}`, 6, 30, { width: widthPoints - 12, align: 'left' });
@@ -371,7 +409,7 @@ app.post('/labels', async (req, res) => {
         height: barcodeHeight 
       });
 
-      // 5. INTAKE DATE at the bottom
+      // 5. INTAKE DATE at the bottom (left-aligned)
       const now = new Date();
       const intakeDate = now.toLocaleDateString('en-US', { 
         month: '2-digit', 
@@ -387,7 +425,7 @@ app.post('/labels', async (req, res) => {
            align: 'left' 
          });
 
-      // MERCANIA branding at the bottom
+      // MERCANIA branding at the bottom (centered)
       doc.fontSize(6)
          .font('Helvetica-Bold')
          .fillColor('#1f2937')
@@ -424,6 +462,160 @@ app.post('/labels', async (req, res) => {
   }
 });
 
+// Lot labels PDF endpoint - optimized for 80x40mm
+app.post('/lot-labels', async (req, res) => {
+  try {
+    const { lotNumber, itemCount, qty } = req.body;
+    
+    // Validate required fields
+    if (!lotNumber) {
+      res.status(400).json({ error: 'lotNumber is required' });
+      return;
+    }
+
+    // Set defaults - force 80x40mm for lot labels
+    const quantity = qty || 1;
+    const displayLotNumber = lotNumber.toString();
+    const displayItemCount = itemCount || 0;
+
+    // Parse label size (80x40mm)
+    const widthMm = 80;
+    const heightMm = 40;
+    
+    // Convert mm to points (1mm = 2.834645669 points)
+    const widthPoints = widthMm * 2.834645669;  // 226.77 points
+    const heightPoints = heightMm * 2.834645669; // 113.39 points
+    
+    // Create PDF document with proper MediaBox and CropBox for 80x40mm
+    const doc = new PDFDocument({ 
+      size: [widthPoints, heightPoints],
+      margin: 0,
+      layout: 'portrait'
+    });
+    
+    // Set MediaBox and CropBox to exact 80x40mm dimensions
+    if (doc.page) {
+      (doc.page as any).mediaBox = [0, 0, widthPoints, heightPoints];
+      (doc.page as any).cropBox = [0, 0, widthPoints, heightPoints];
+      (doc.page as any).bleedBox = [0, 0, widthPoints, heightPoints];
+      (doc.page as any).trimBox = [0, 0, widthPoints, heightPoints];
+    }
+    
+    // Set response headers for PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="lot_labels_${lotNumber}.pdf"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Generate multiple copies if quantity > 1
+    for (let i = 0; i < quantity; i++) {
+      if (i > 0) {
+        doc.addPage();
+      }
+
+      // Background - exact 80mm x 40mm dimensions
+      doc.rect(0, 0, widthPoints, heightPoints)
+         .fill('#ffffff');
+
+      // Generate Code 128 barcode for lot number
+      const canvas = createCanvas(200, 30);
+      JsBarcode(canvas, `LOT${displayLotNumber}`, {
+        format: "CODE128",
+        width: 2,
+        height: 25,
+        displayValue: false,
+        margin: 0
+      });
+      
+      // Convert canvas to buffer
+      const barcodeBuffer = canvas.toBuffer('image/png');
+
+      // 1. LOT NUMBER at the top (left-aligned)
+      doc.fontSize(10)
+         .font('Helvetica-Bold')
+         .fillColor('#000000')
+         .text(`LOT #${displayLotNumber}`, 6, 8, { 
+           width: widthPoints - 12, 
+           align: 'left' 
+         });
+
+      // 2. ITEM COUNT below lot number (left-aligned)
+      doc.fontSize(8)
+         .font('Helvetica')
+         .fillColor('#333333')
+         .text(`Items: ${displayItemCount}`, 6, 25, { 
+           width: widthPoints - 12, 
+           align: 'left' 
+         });
+
+      // 3. BARCODE (Code 128 of lot number) - centered
+      const barcodeWidth = Math.min(widthPoints - 16, 140);
+      const barcodeHeight = 16;
+      const barcodeX = (widthPoints - barcodeWidth) / 2;
+      const barcodeY = 40;
+
+      doc.image(barcodeBuffer, barcodeX, barcodeY, { 
+        width: barcodeWidth, 
+        height: barcodeHeight 
+      });
+
+      // 4. MERCANIA branding at the bottom (centered)
+      doc.fontSize(6)
+         .font('Helvetica-Bold')
+         .fillColor('#1f2937')
+         .text('MERCANIA', 6, heightPoints - 15, { 
+           width: widthPoints - 12, 
+           align: 'center' 
+         });
+
+      // 5. DATE at the very bottom (left-aligned)
+      const now = new Date();
+      const lotDate = now.toLocaleDateString('en-US', { 
+        month: '2-digit', 
+        day: '2-digit', 
+        year: '2-digit' 
+      });
+      
+      doc.fontSize(5)
+         .font('Helvetica')
+         .fillColor('#666666')
+         .text(lotDate, 6, heightPoints - 8, { 
+           width: widthPoints - 12, 
+           align: 'left' 
+         });
+
+      // Copy index if multiple copies
+      if (quantity > 1) {
+        doc.fontSize(5)
+           .font('Helvetica-Bold')
+           .fillColor('#dc2626')
+           .text(`COPY ${i + 1}`, 6, heightPoints - 4, { 
+             width: widthPoints - 12, 
+             align: 'right' 
+           });
+      }
+
+      // Clean border
+      doc.rect(1, 1, widthPoints - 2, heightPoints - 2)
+         .lineWidth(0.5)
+         .stroke('#e5e7eb');
+    }
+
+    // Finalize PDF
+    doc.end();
+
+  } catch (error) {
+    console.error('Error generating lot labels PDF:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate lot labels PDF', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
+});
 
 // GET endpoint for easier testing - redirects to POST with sample data
 app.get('/labels', (req, res) => {
@@ -511,6 +703,61 @@ app.post('/api/print-label', async (req, res) => {
     console.error('Error printing label:', error);
     res.status(500).json({ 
       error: 'Failed to print label', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
+});
+
+// Print lot label directly to USB printer
+app.post('/api/print-lot-label', async (req, res) => {
+  try {
+    const { lotNumber, itemCount, printerName } = req.body;
+    
+    if (!lotNumber) {
+      res.status(400).json({ error: 'Lot number is required' });
+      return;
+    }
+
+    // Read the ZPL template
+    const templatePath = path.join(process.cwd(), '..', '..', 'zpl', 'mercania_lot_label.zpl');
+    let zplTemplate = fs.readFileSync(templatePath, 'utf8');
+    
+    // Replace placeholders with actual values
+    zplTemplate = zplTemplate.replace(/{LOT_NUMBER}/g, String(lotNumber));
+    zplTemplate = zplTemplate.replace(/{ITEM_COUNT}/g, String(itemCount || '0'));
+    
+    // Create temporary file for ZPL
+    const tempFile = path.join(process.cwd(), '..', '..', 'temp_lot_label.zpl');
+    fs.writeFileSync(tempFile, zplTemplate);
+    
+    try {
+      // Print using system command
+      const printCommand = printerName 
+        ? `lp -d "${printerName}" "${tempFile}"`
+        : `lp "${tempFile}"`;
+      
+      const { stdout, stderr } = await execAsync(printCommand);
+      
+      // Clean up temp file
+      fs.unlinkSync(tempFile);
+      
+      res.json({ 
+        success: true, 
+        message: 'Lot label sent to printer successfully',
+        printer: printerName || 'default',
+        output: stdout 
+      });
+    } catch (printError) {
+      // Clean up temp file even if printing fails
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+      throw printError;
+    }
+  } catch (error) {
+    console.error('Error printing lot label:', error);
+    res.status(500).json({ 
+      error: 'Failed to print lot label', 
       details: error instanceof Error ? error.message : String(error) 
     });
   }

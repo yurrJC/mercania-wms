@@ -663,94 +663,52 @@ export default function InventoryPage() {
     }
   };
 
-  // Print lot label
-  const handlePrintLabel = (lot: any) => {
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Lot Label #${lot.lotNumber}</title>
-          <style>
-            @page {
-              size: 4in 2in;
-              margin: 0.1in;
-            }
-            body {
-              font-family: 'Courier New', monospace;
-              margin: 0;
-              padding: 8px;
-              font-size: 12px;
-              line-height: 1.2;
-            }
-            .header {
-              text-align: center;
-              border-bottom: 2px solid #000;
-              padding-bottom: 4px;
-              margin-bottom: 8px;
-            }
-            .lot-number {
-              font-size: 18px;
-              font-weight: bold;
-              margin: 4px 0;
-            }
-            .info {
-              margin: 2px 0;
-            }
-            .barcode {
-              text-align: center;
-              font-family: 'Libre Barcode 128', monospace;
-              font-size: 24px;
-              margin: 8px 0;
-              letter-spacing: 1px;
-            }
-            .footer {
-              border-top: 1px solid #000;
-              padding-top: 4px;
-              margin-top: 8px;
-              font-size: 10px;
-              text-align: center;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <strong>MERCANIA WMS</strong>
-          </div>
-          
-          <div class="lot-number">
-            LOT #${lot.lotNumber}
-          </div>
-          
-          <div class="info">
-            <strong>Items:</strong> ${lot.itemCount}
-          </div>
-          
-          <div class="info">
-            <strong>Created:</strong> ${new Date(lot.createdAt).toLocaleDateString()}
-          </div>
-          
-          <div class="barcode">
-            *LOT${lot.lotNumber}*
-          </div>
-          
-          <div class="footer">
-            Mercania Warehouse Management System
-          </div>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.focus();
+  // Print lot label (80x40mm format) using new API endpoint
+  const handlePrintLabel = async (lot: any) => {
+    try {
+      // Use new 80x40mm lot label endpoint with POST method
+      const response = await apiCall('http://localhost:3001/lot-labels', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lotNumber: lot.lotNumber,
+          itemCount: lot.itemCount,
+          qty: 1
+        })
+      });
       
-      // Auto-print after a short delay
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
+      if (!response.ok) {
+        throw new Error('Failed to generate lot label');
+      }
+      
+      const pdfBlob = await response.blob();
+      const url = window.URL.createObjectURL(pdfBlob);
+      
+      // Open PDF in new window for printing
+      const printWindow = window.open(url, '_blank');
+      
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      } else {
+        // Fallback: download the PDF
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `lot_label_${lot.lotNumber}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        alert('PDF lot label downloaded. Open in Preview and print for best results.');
+      }
+      
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error generating lot label:', error);
+      alert('Error generating lot label. Please try again.');
     }
   };
 
