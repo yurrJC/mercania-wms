@@ -30,7 +30,7 @@ const lookupDVDByUPC = async (upc: string) => {
       throw new Error('Failed to get eBay access token');
     }
 
-    const tokenData = await tokenResponse.json();
+    const tokenData = await tokenResponse.json() as any;
     const accessToken = tokenData.access_token;
 
     // Search for product by UPC using eBay Product Catalog API
@@ -52,7 +52,7 @@ const lookupDVDByUPC = async (upc: string) => {
       throw new Error('DVD not found in eBay catalog');
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     if (!data.productSummaries || data.productSummaries.length === 0) {
       throw new Error('No DVD found for this UPC');

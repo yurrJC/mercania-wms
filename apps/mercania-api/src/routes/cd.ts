@@ -32,7 +32,7 @@ const lookupCDByBarcode = async (barcode: string) => {
       console.error('eBay API Error:', tokenResponse.status, tokenResponse.statusText);
       throw new Error('Failed to get eBay access token');
     }
-    const tokenData = await tokenResponse.json();
+    const tokenData = await tokenResponse.json() as any;
     const accessToken = tokenData.access_token;
 
     // Use the access token to search the Catalog API by UPC
@@ -54,7 +54,7 @@ const lookupCDByBarcode = async (barcode: string) => {
       throw new Error('Failed to fetch CD data from eBay');
     }
 
-    const productData = await productResponse.json();
+    const productData = await productResponse.json() as any;
 
     if (!productData.productSummaries || productData.productSummaries.length === 0) {
       throw new Error('CD not found in eBay catalog');
