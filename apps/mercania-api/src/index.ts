@@ -517,6 +517,7 @@ app.post('/api/print-label', async (req, res) => {
 });
 
 // API Routes
+import authRoutes from './routes/auth.js';
 import intakeRoutes from './routes/intake.js';
 import itemsRoutes from './routes/items.js';
 import reportsRoutes from './routes/reports.js';
@@ -524,14 +525,19 @@ import lotsRoutes from './routes/lots.js';
 import cogRoutes from './routes/cog.js';
 import cogsRoutes from './routes/cogs.js';
 import salesRoutes from './routes/sales.js';
+import { authenticateToken } from './middleware/auth.js';
 
-app.use('/api/intake', intakeRoutes);
-app.use('/api/items', itemsRoutes);
-app.use('/api/reports', reportsRoutes);
-app.use('/api/lots', lotsRoutes);
-app.use('/api/cog', cogRoutes);
-app.use('/api/cogs', cogsRoutes);
-app.use('/api/sales', salesRoutes);
+// Public auth routes (no authentication required)
+app.use('/api/auth', authRoutes);
+
+// All other API routes require authentication
+app.use('/api/intake', authenticateToken, intakeRoutes);
+app.use('/api/items', authenticateToken, itemsRoutes);
+app.use('/api/reports', authenticateToken, reportsRoutes);
+app.use('/api/lots', authenticateToken, lotsRoutes);
+app.use('/api/cog', authenticateToken, cogRoutes);
+app.use('/api/cogs', authenticateToken, cogsRoutes);
+app.use('/api/sales', authenticateToken, salesRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { apiCall } from '../../utils/api';
 
 export default function DebugPage() {
   const [apiTest, setApiTest] = useState<any>(null);
@@ -17,7 +18,7 @@ export default function DebugPage() {
       console.log('Testing API connection...');
       
       // Test direct API
-      const response = await fetch('/api/items');
+      const response = await apiCall('http://localhost:3001/api/items');
       console.log('Response status:', response.status);
       
       if (!response.ok) {

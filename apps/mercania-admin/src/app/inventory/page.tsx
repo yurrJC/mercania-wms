@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { apiCall } from '../../utils/api';
 import { 
   Package,
   Search,
@@ -122,7 +123,7 @@ export default function InventoryPage() {
       if (isbn.trim()) params.append('isbn', isbn.trim());
       if (id.trim()) params.append('search', id.trim());
 
-      const response = await fetch(`/api/items?${params.toString()}`);
+      const response = await apiCall(`http://localhost:3001/api/items?${params.toString()}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch inventory');
@@ -215,7 +216,7 @@ export default function InventoryPage() {
       if (idSearch.trim()) params.append('search', idSearch.trim());
 
       const url = `/api/items/export?${params.toString()}`;
-      const res = await fetch(url);
+      const res = await apiCall(`http://localhost:3001${url}`);
       if (!res.ok) throw new Error('Failed to export');
       const blob = await res.blob();
       const link = document.createElement('a');
@@ -250,7 +251,7 @@ export default function InventoryPage() {
   const handleDeleteItem = async (item: Item) => {
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/items/${item.id}`, {
+      const response = await apiCall(`http://localhost:3001/api/items/${item.id}`, {
         method: 'DELETE',
       });
 
@@ -284,7 +285,7 @@ export default function InventoryPage() {
   // Handle view item details
   const handleViewItem = async (item: Item) => {
     try {
-      const response = await fetch(`/api/items/${item.id}`);
+      const response = await apiCall(`http://localhost:3001/api/items/${item.id}`);
       const result = await response.json();
       
       if (result.success) {
@@ -315,7 +316,7 @@ export default function InventoryPage() {
         url = `/api/items?isbn=${trimmedSearch}`;
       }
 
-      const response = await fetch(url);
+      const response = await apiCall(`http://localhost:3001${url}`);
       const result = await response.json();
       
       if (result.success && result.data.items.length > 0) {
@@ -355,7 +356,7 @@ export default function InventoryPage() {
       const lotNumber = Math.min(...lotItems.map(item => item.id));
       const itemIds = lotItems.map(item => item.id);
 
-      const response = await fetch('/api/lots', {
+      const response = await apiCall('http://localhost:3001/api/lots', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -415,7 +416,7 @@ export default function InventoryPage() {
   const fetchAllLots = async () => {
     setIsLoadingLots(true);
     try {
-      const response = await fetch('/api/lots');
+      const response = await apiCall('http://localhost:3001/api/lots');
       const result = await response.json();
       
       if (result.success) {
@@ -436,7 +437,7 @@ export default function InventoryPage() {
     setShowManageLotsModal(true);
     await fetchAllLots();
     // Also refresh inventory to ensure consistency
-    await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
+    await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
   };
 
   // Delete entire lot
@@ -463,14 +464,14 @@ export default function InventoryPage() {
         };
       });
 
-      const response = await fetch(`/api/lots/${lotNumber}`, {
+      const response = await apiCall(`http://localhost:3001/api/lots/${lotNumber}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
         // If deletion failed, revert the optimistic updates
         await fetchAllLots();
-        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
+        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
         
         const errorResult = await response.json();
         setError(errorResult.error || `Failed to delete lot (${response.status})`);
@@ -482,7 +483,7 @@ export default function InventoryPage() {
       if (!result.success) {
         // If deletion failed, revert the optimistic updates
         await fetchAllLots();
-        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
+        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
         setError(result.error || 'Failed to delete lot');
       }
       // If successful, the optimistic updates are already applied - no need for additional API calls
@@ -490,7 +491,7 @@ export default function InventoryPage() {
       console.error('Delete lot error:', err);
       // If deletion failed, revert the optimistic updates
       await fetchAllLots();
-      await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
+      await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
       setError('Failed to delete lot');
     } finally {
       setIsDeletingLot(null);
@@ -506,7 +507,7 @@ export default function InventoryPage() {
         return;
       }
       
-      const response = await fetch(`/api/lots/${lotNumber}/remove`, {
+      const response = await apiCall(`http://localhost:3001/api/lots/${lotNumber}/remove`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -559,7 +560,7 @@ export default function InventoryPage() {
         if (!isItemVisible) {
           // Fetch the specific item's updated data
           try {
-            const response = await fetch(`/api/items/${itemId}`);
+            const response = await apiCall(`http://localhost:3001/api/items/${itemId}`);
             if (response.ok) {
               const result = await response.json();
               if (result.success) {
@@ -607,7 +608,7 @@ export default function InventoryPage() {
       const itemTitle = item.isbnMaster?.title || 'Unknown Item';
       
       // Use new 80x40mm label endpoint with POST method
-      const response = await fetch('http://localhost:3001/labels', {
+      const response = await apiCall('http://localhost:3001/labels', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -761,7 +762,7 @@ export default function InventoryPage() {
     setError('');
 
     try {
-      const response = await fetch('/api/cog/calculate', {
+      const response = await apiCall('http://localhost:3001/api/cog/calculate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -794,7 +795,7 @@ export default function InventoryPage() {
         setShowCOGModal(false);
         
         // Refresh inventory to show updated costs
-        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter);
+        await fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
       } else {
         throw new Error(result.error || 'Failed to process COG calculation');
       }
@@ -834,7 +835,7 @@ export default function InventoryPage() {
         throw new Error('Please enter valid item IDs (e.g. 7, 3, 10)');
       }
 
-      const response = await fetch('/api/items/update-dates', {
+      const response = await apiCall('http://localhost:3001/api/items/update-dates', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -935,7 +936,7 @@ export default function InventoryPage() {
                 Update Dates
               </button>
               <button
-                onClick={() => fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter)}
+                onClick={() => fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder)}
                 className="bg-gray-100 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-200 font-medium transition-colors flex items-center"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -1964,7 +1965,7 @@ export default function InventoryPage() {
                               <button
                                 onClick={() => {
                                   // Fetch full lot details for editing
-                                  fetch(`/api/lots/${lot.lotNumber}`)
+                                  apiCall(`http://localhost:3001/api/lots/${lot.lotNumber}`)
                                     .then(res => res.json())
                                     .then(result => {
                                       if (result.success) {

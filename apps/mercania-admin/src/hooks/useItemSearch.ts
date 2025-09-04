@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { apiCall } from '../utils/api';
 
 // Types
 export interface ItemData {
@@ -47,7 +48,7 @@ const transformItemData = (apiItem: any): ItemData => ({
 class ApiClient {
   private static async request<T>(url: string, options?: RequestInit): Promise<T> {
     try {
-      const response = await fetch(url, {
+      const response = await apiCall(`http://localhost:3001${url}`, {
         headers: {
           'Content-Type': 'application/json',
           ...options?.headers,

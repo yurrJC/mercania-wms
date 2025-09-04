@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { apiCall } from '../../utils/api';
 import { 
   ArrowLeft,
   BarChart3,
@@ -150,7 +151,7 @@ export default function ReportingPage() {
     setError('');
     
     try {
-      const response = await fetch(`/api/cog/records?page=${page}&limit=20`);
+      const response = await apiCall(`http://localhost:3001/api/cog/records?page=${page}&limit=20`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch COG records');
@@ -175,7 +176,7 @@ export default function ReportingPage() {
   // Fetch COGS summary data
   const fetchCOGSSummary = async () => {
     try {
-      const response = await fetch('/api/cogs/summary');
+      const response = await apiCall('http://localhost:3001/api/cogs/summary');
       if (!response.ok) throw new Error('Failed to fetch COGS summary');
       
       const result = await response.json();
@@ -191,7 +192,7 @@ export default function ReportingPage() {
   // Fetch COGS monthly data
   const fetchCOGSMonthlyData = async (year: number) => {
     try {
-      const response = await fetch(`/api/cogs/monthly?year=${year}`);
+      const response = await apiCall(`http://localhost:3001/api/cogs/monthly?year=${year}`);
       if (!response.ok) throw new Error('Failed to fetch COGS monthly data');
       
       const result = await response.json();
@@ -207,7 +208,7 @@ export default function ReportingPage() {
   // Fetch Sales summary data
   const fetchSalesSummary = async () => {
     try {
-      const response = await fetch('/api/sales/summary');
+      const response = await apiCall('http://localhost:3001/api/sales/summary');
       if (!response.ok) throw new Error('Failed to fetch sales summary');
       
       const result = await response.json();
@@ -223,7 +224,7 @@ export default function ReportingPage() {
   // Fetch Sales monthly data
   const fetchSalesMonthlyData = async (year: number) => {
     try {
-      const response = await fetch(`/api/sales/monthly?year=${year}`);
+      const response = await apiCall(`http://localhost:3001/api/sales/monthly?year=${year}`);
       if (!response.ok) throw new Error('Failed to fetch sales monthly data');
       
       const result = await response.json();
@@ -239,7 +240,7 @@ export default function ReportingPage() {
   // Fetch Recent sales data
   const fetchRecentSalesData = async (days: number) => {
     try {
-      const response = await fetch(`/api/sales/recent?days=${days}&limit=50`);
+      const response = await apiCall(`http://localhost:3001/api/sales/recent?days=${days}&limit=50`);
       if (!response.ok) throw new Error('Failed to fetch recent sales');
       
       const result = await response.json();
@@ -272,7 +273,7 @@ export default function ReportingPage() {
     }
     else if (activeTab === 'inventory') {
       setIsLoading(true);
-      fetch('/api/reports/inventory-by-location')
+      apiCall('http://localhost:3001/api/reports/inventory-by-location')
         .then((r) => r.json())
         .then((res) => {
           if (res.success) {
@@ -291,7 +292,7 @@ export default function ReportingPage() {
     setError('');
 
     try {
-      const response = await fetch(`/api/cog/records/${record.id}`, {
+      const response = await apiCall(`http://localhost:3001/api/cog/records/${record.id}`, {
         method: 'DELETE',
       });
 
@@ -1212,7 +1213,7 @@ function InventoryByLocationChart() {
   useEffect(() => {
     setLoading(true);
     setError('');
-    fetch('/api/reports/inventory-by-location')
+    apiCall('http://localhost:3001/api/reports/inventory-by-location')
       .then(r => r.json())
       .then(res => {
         if (res.success) {

@@ -17,7 +17,7 @@ const IntakeSchema = z.object({
   title: z.string().optional(),
   author: z.string().optional(), // For DVDs, this will be the director
   publisher: z.string().optional(), // For DVDs, this will be the studio
-  pubYear: z.number().optional(), // Release year
+  pubYear: z.number().nullable().optional(), // Release year
   binding: z.string().optional(), // For DVDs, this will be the format
   conditionGrade: z.string().optional(),
   conditionNotes: z.string().optional(),
@@ -182,8 +182,19 @@ router.post('/', async (req, res): Promise<any> => {
     console.log('=== INTAKE REQUEST START ===');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
     // Validate input
+    try {
+      const validatedData = IntakeSchema.parse(req.body);
+      console.log('Validated data:', JSON.stringify(validatedData, null, 2));
+    } catch (validationError) {
+      console.error('Validation error:', validationError);
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        details: validationError
+      });
+    }
+    
     const validatedData = IntakeSchema.parse(req.body);
-    console.log('Validated data:', JSON.stringify(validatedData, null, 2));
     
     const productType = validatedData.productType || 'BOOK';
     // Support both 'isbn' and 'barcode' fields for flexibility
@@ -299,18 +310,8 @@ router.post('/', async (req, res): Promise<any> => {
     // Manual books with no ISBN will not have a master record - they're tracked by internal ID only
     let isbnMaster = null;
     if (identifier) {
-      isbnMaster = await prisma.isbnMaster.upsert({
-        where: { isbn: identifier },
-        update: {
-          title: itemData.title,
-          author: itemData.author,
-          publisher: itemData.publisher,
-          pubYear: itemData.pubYear,
-          binding: itemData.binding,
-          imageUrl: itemData.imageUrl,
-          categories: itemData.categories
-        },
-        create: {
+      try {
+        console.log('Creating/updating ISBN master with data:', JSON.stringify({
           isbn: identifier,
           title: itemData.title,
           author: itemData.author,
@@ -319,8 +320,39 @@ router.post('/', async (req, res): Promise<any> => {
           binding: itemData.binding,
           imageUrl: itemData.imageUrl,
           categories: itemData.categories
-        }
-      });
+        }, null, 2));
+        
+        isbnMaster = await prisma.isbnMaster.upsert({
+          where: { isbn: identifier },
+          update: {
+            title: itemData.title,
+            author: itemData.author,
+            publisher: itemData.publisher,
+            pubYear: itemData.pubYear,
+            binding: itemData.binding,
+            imageUrl: itemData.imageUrl,
+            categories: itemData.categories
+          },
+          create: {
+            isbn: identifier,
+            title: itemData.title,
+            author: itemData.author,
+            publisher: itemData.publisher,
+            pubYear: itemData.pubYear,
+            binding: itemData.binding,
+            imageUrl: itemData.imageUrl,
+            categories: itemData.categories
+          }
+        });
+        console.log('ISBN master created/updated successfully');
+      } catch (isbnError) {
+        console.error('Error creating ISBN master:', isbnError);
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to create ISBN master record',
+          details: isbnError
+        });
+      }
     }
 
     // Create new item (PostgreSQL auto-generates sequential ID)
@@ -330,30 +362,42 @@ router.post('/', async (req, res): Promise<any> => {
     console.log('Creating item with identifier:', identifier);
     
     let item;
-    if (identifier) {
-      // Item with ISBN - include the master relation
-      item = await prisma.item.create({
-        data: {
-          isbn: identifier,
-          conditionGrade: validatedData.conditionGrade,
-          conditionNotes: validatedData.conditionNotes,
-          costCents: validatedData.costCents,
-          currentStatus: 'INTAKE'
-        },
-        include: {
-          isbnMaster: true
-        }
-      });
-    } else {
-      // Manual book without ISBN - no master relation
-      item = await prisma.item.create({
-        data: {
-          isbn: null, // Explicitly set to null for manual books
-          conditionGrade: validatedData.conditionGrade,
-          conditionNotes: validatedData.conditionNotes,
-          costCents: validatedData.costCents,
-          currentStatus: 'INTAKE'
-        }
+    try {
+      if (identifier) {
+        // Item with ISBN - include the master relation
+        console.log('Creating item with ISBN:', identifier);
+        item = await prisma.item.create({
+          data: {
+            isbn: identifier,
+            conditionGrade: validatedData.conditionGrade,
+            conditionNotes: validatedData.conditionNotes,
+            costCents: validatedData.costCents,
+            currentStatus: 'INTAKE'
+          },
+          include: {
+            isbnMaster: true
+          }
+        });
+      } else {
+        // Manual book without ISBN - no master relation
+        console.log('Creating manual book without ISBN');
+        item = await prisma.item.create({
+          data: {
+            isbn: null, // Explicitly set to null for manual books
+            conditionGrade: validatedData.conditionGrade,
+            conditionNotes: validatedData.conditionNotes,
+            costCents: validatedData.costCents,
+            currentStatus: 'INTAKE'
+          }
+        });
+      }
+      console.log('Item created successfully with ID:', item.id);
+    } catch (itemError) {
+      console.error('Error creating item:', itemError);
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to create item',
+        details: itemError
       });
     }
 

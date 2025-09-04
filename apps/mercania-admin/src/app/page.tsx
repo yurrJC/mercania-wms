@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   BookOpen, 
@@ -11,21 +11,65 @@ import {
   TrendingUp,
   DollarSign,
   MapPin,
-  FileText
+  FileText,
+  Loader2,
+  LogOut
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { apiCall } from '../utils/api';
+
+interface DashboardStats {
+  totalItems: number;
+  stored: number;
+  listed: number;
+  listedValue: number;
+  statusBreakdown: Array<{
+    status: string;
+    count: number;
+  }>;
+}
 
 export default function Dashboard() {
-  const [stats] = useState({
-    totalItems: 247,
-    statusBreakdown: {
-      INTAKE: 12,
-      STORED: 89,
-      LISTED: 134,
-      SOLD: 12
-    },
-    totalListedValue: 8950,
-    lastUpdated: new Date().toISOString()
+  const { logout } = useAuth();
+  const [stats, setStats] = useState<DashboardStats>({
+    totalItems: 0,
+    stored: 0,
+    listed: 0,
+    listedValue: 0,
+    statusBreakdown: []
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>(new Date().toISOString());
+
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const response = await apiCall('http://localhost:3001/api/items/dashboard-stats');
+        if (!response.ok) {
+          throw new Error('Failed to fetch dashboard statistics');
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+          setStats(result.data);
+          setLastUpdated(new Date().toISOString());
+        } else {
+          throw new Error(result.error || 'Failed to fetch dashboard statistics');
+        }
+      } catch (err) {
+        console.error('Dashboard stats error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch dashboard statistics');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardStats();
+  }, []);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -56,8 +100,16 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-500">
-                Last updated: {new Date(stats.lastUpdated).toLocaleString()}
+                Last updated: {new Date(lastUpdated).toLocaleString()}
               </span>
+              <button
+                onClick={logout}
+                className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </button>
             </div>
           </div>
         </div>
@@ -109,6 +161,19 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <div className="text-red-600 mr-3">⚠️</div>
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Error loading dashboard data</h3>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -118,7 +183,9 @@ export default function Dashboard() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Items</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.totalItems}</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.totalItems}
+                </p>
               </div>
             </div>
           </div>
@@ -130,7 +197,9 @@ export default function Dashboard() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Stored</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.statusBreakdown.STORED}</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.stored}
+                </p>
               </div>
             </div>
           </div>
@@ -142,7 +211,9 @@ export default function Dashboard() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Listed</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.statusBreakdown.LISTED}</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : stats.listed}
+                </p>
               </div>
             </div>
           </div>
@@ -153,8 +224,10 @@ export default function Dashboard() {
                 <DollarSign className="h-6 w-6 text-purple-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Listed Value</p>
-                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.totalListedValue)}</p>
+                <p className="text-sm font-medium text-gray-600">Cost of Goods Sold</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : formatCurrency(stats.listedValue * 100)}
+                </p>
               </div>
             </div>
           </div>
@@ -165,14 +238,22 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Status Breakdown</h3>
             <div className="space-y-3">
-              {Object.entries(stats.statusBreakdown).map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                    {status}
-                  </span>
-                  <span className="text-sm font-medium text-gray-900">{count}</span>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
                 </div>
-              ))}
+              ) : stats.statusBreakdown.length > 0 ? (
+                stats.statusBreakdown.map(({ status, count }) => (
+                  <div key={status} className="flex items-center justify-between">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                      {status}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900">{count}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No data available</p>
+              )}
             </div>
           </div>
 

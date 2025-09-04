@@ -696,6 +696,69 @@ router.post('/putaway-activity/pdf', async (req, res) => {
   }
 });
 
+// GET /items/dashboard-stats - Get dashboard statistics
+router.get('/dashboard-stats', async (req, res) => {
+  try {
+    // Get total items count
+    const totalItems = await prisma.item.count();
+
+    // Get status breakdown
+    const statusBreakdown = await prisma.item.groupBy({
+      by: ['currentStatus'],
+      _count: {
+        currentStatus: true
+      }
+    });
+
+    // Get total cost of goods sold (COGS) from sold items
+    const cogsResult = await prisma.item.aggregate({
+      where: {
+        currentStatus: 'SOLD'
+      },
+      _sum: {
+        costCents: true
+      }
+    });
+
+    // Get stored items count
+    const storedCount = statusBreakdown.find(s => s.currentStatus === 'STORED')?._count.currentStatus || 0;
+    
+    // Get listed items count
+    const listedCount = statusBreakdown.find(s => s.currentStatus === 'LISTED')?._count.currentStatus || 0;
+
+    // Calculate total COGS in dollars
+    const totalCOGS = cogsResult._sum.costCents ? cogsResult._sum.costCents / 100 : 0;
+
+    // Format status breakdown for frontend in workflow order
+    const statusOrder = ['INTAKE', 'STORED', 'LISTED', 'SOLD'];
+    const statusData = statusOrder.map(status => {
+      const found = statusBreakdown.find(s => s.currentStatus === status);
+      return {
+        status: status,
+        count: found ? found._count.currentStatus : 0
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        totalItems,
+        stored: storedCount,
+        listed: listedCount,
+        listedValue: totalCOGS, // This is actually COGS, not listed value
+        statusBreakdown: statusData
+      }
+    });
+
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch dashboard statistics'
+    });
+  }
+});
+
 // GET /items/:id - Get item details
 router.get('/:id', async (req, res) => {
   try {
@@ -1593,5 +1656,6 @@ router.post('/update-dates', async (req, res): Promise<any> => {
     });
   }
 });
+
 
 export default router;
