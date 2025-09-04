@@ -26,6 +26,14 @@ export interface ApiError {
   code?: string;
 }
 
+// Custom error class
+class ApiError extends Error {
+  constructor(message: string, public status?: number, public code?: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 // Generate SKU in LOCATION-ID format (same as inventory page)
 const generateSKU = (item: any): string => {
   const location = item.currentLocation || 'TBD';
@@ -99,14 +107,6 @@ class ApiClient {
     }
 
     return transformItemData(result.data);
-  }
-}
-
-// Custom error class
-class ApiError extends Error {
-  constructor(message: string, public status?: number, public code?: string) {
-    super(message);
-    this.name = 'ApiError';
   }
 }
 
