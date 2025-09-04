@@ -15,30 +15,30 @@ router.get('/', async (req, res) => {
     // Add caching headers since lot data changes less frequently
     res.set('Cache-Control', 'public, max-age=60'); // 1 minute cache
     
-    // Get total count of lots first
-    const totalLots = await prisma.item.groupBy({
-      by: ['lotNumber'],
-      where: {
-        lotNumber: { not: null }
-      },
-      _count: { id: true }
-    });
+    // Use a single optimized query to get both count and data
+    const [totalCountResult, lotAggregates] = await Promise.all([
+      // Get total count efficiently
+      prisma.$queryRaw`
+        SELECT COUNT(DISTINCT "lotNumber") as total_count
+        FROM items 
+        WHERE "lotNumber" IS NOT NULL
+      `,
+      // Get paginated lot data
+      prisma.item.groupBy({
+        by: ['lotNumber'],
+        where: {
+          lotNumber: { not: null }
+        },
+        _count: { id: true },
+        _min: { createdAt: true },
+        orderBy: { lotNumber: 'desc' },
+        skip,
+        take: limitNum
+      })
+    ]);
 
-    const totalCount = totalLots.length;
+    const totalCount = Number((totalCountResult as any)[0].total_count);
     const totalPages = Math.ceil(totalCount / limitNum);
-
-    // Use Prisma aggregation for efficient lot counting with pagination
-    const lotAggregates = await prisma.item.groupBy({
-      by: ['lotNumber'],
-      where: {
-        lotNumber: { not: null }
-      },
-      _count: { id: true },
-      _min: { createdAt: true },
-      orderBy: { lotNumber: 'desc' },
-      skip,
-      take: limitNum
-    });
 
     // Get sample titles for each lot (limit to first 3 unique titles)
     const lotSummaries = await Promise.all(

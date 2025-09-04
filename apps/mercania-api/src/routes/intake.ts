@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../index';
 import dvdRoutes from './dvd';
 import cdRoutes from './cd';
+import { invalidateDashboardCache } from '../utils/cache';
 
 const router = Router();
 
@@ -425,6 +426,9 @@ router.post('/', async (req, res): Promise<any> => {
       })),
       recommendation: 'A new label is needed for this additional copy.'
     } : { isDuplicate: false };
+
+    // Invalidate dashboard cache since stats may have changed
+    invalidateDashboardCache();
 
     res.status(201).json({
       success: true,

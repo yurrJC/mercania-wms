@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../index';
 import { createCOGSRecord } from './cogs.js';
 import PDFDocument from 'pdfkit';
+import { invalidateDashboardCache, getCachedDashboardStats, setCachedDashboardStats, isDashboardCacheValid } from '../utils/cache';
 
 const router = Router();
 
@@ -696,59 +697,57 @@ router.post('/putaway-activity/pdf', async (req, res) => {
   }
 });
 
-// GET /items/dashboard-stats - Get dashboard statistics
+// GET /items/dashboard-stats - Get dashboard statistics (optimized with caching)
 router.get('/dashboard-stats', async (req, res) => {
   try {
-    // Get total items count
-    const totalItems = await prisma.item.count();
+    // Check cache first
+    const cachedData = getCachedDashboardStats();
+    if (cachedData) {
+      res.set('Cache-Control', 'public, max-age=30');
+      res.set('X-Cache-Status', 'HIT');
+      return res.json(cachedData);
+    }
 
-    // Get status breakdown
-    const statusBreakdown = await prisma.item.groupBy({
-      by: ['currentStatus'],
-      _count: {
-        currentStatus: true
-      }
-    });
+    // Use a single optimized query instead of multiple queries
+    const stats = await prisma.$queryRaw`
+      SELECT 
+        COUNT(*) as total_items,
+        COUNT(CASE WHEN "currentStatus" = 'STORED' THEN 1 END) as stored_count,
+        COUNT(CASE WHEN "currentStatus" = 'LISTED' THEN 1 END) as listed_count,
+        COUNT(CASE WHEN "currentStatus" = 'INTAKE' THEN 1 END) as intake_count,
+        COUNT(CASE WHEN "currentStatus" = 'SOLD' THEN 1 END) as sold_count,
+        COALESCE(SUM(CASE WHEN "currentStatus" = 'SOLD' THEN "costCents" ELSE 0 END), 0) as total_cogs_cents
+      FROM items
+    `;
 
-    // Get total cost of goods sold (COGS) from sold items
-    const cogsResult = await prisma.item.aggregate({
-      where: {
-        currentStatus: 'SOLD'
-      },
-      _sum: {
-        costCents: true
-      }
-    });
-
-    // Get stored items count
-    const storedCount = statusBreakdown.find(s => s.currentStatus === 'STORED')?._count.currentStatus || 0;
-    
-    // Get listed items count
-    const listedCount = statusBreakdown.find(s => s.currentStatus === 'LISTED')?._count.currentStatus || 0;
-
-    // Calculate total COGS in dollars
-    const totalCOGS = cogsResult._sum.costCents ? cogsResult._sum.costCents / 100 : 0;
+    const result = (stats as any[])[0];
+    const totalCOGS = result.total_cogs_cents ? Number(result.total_cogs_cents) / 100 : 0;
 
     // Format status breakdown for frontend in workflow order
-    const statusOrder = ['INTAKE', 'STORED', 'LISTED', 'SOLD'];
-    const statusData = statusOrder.map(status => {
-      const found = statusBreakdown.find(s => s.currentStatus === status);
-      return {
-        status: status,
-        count: found ? found._count.currentStatus : 0
-      };
-    });
+    const statusData = [
+      { status: 'INTAKE', count: Number(result.intake_count) },
+      { status: 'STORED', count: Number(result.stored_count) },
+      { status: 'LISTED', count: Number(result.listed_count) },
+      { status: 'SOLD', count: Number(result.sold_count) }
+    ];
 
-    return res.json({
+    const responseData = {
       success: true,
       data: {
-        totalItems,
-        stored: storedCount,
-        listed: listedCount,
+        totalItems: Number(result.total_items),
+        stored: Number(result.stored_count),
+        listed: Number(result.listed_count),
         listedValue: totalCOGS, // This is actually COGS, not listed value
         statusBreakdown: statusData
       }
-    });
+    };
+
+    // Cache the result
+    setCachedDashboardStats(responseData);
+
+    res.set('Cache-Control', 'public, max-age=30');
+    res.set('X-Cache-Status', 'MISS');
+    return res.json(responseData);
 
   } catch (error) {
     console.error('Dashboard stats error:', error);
@@ -1016,7 +1015,7 @@ router.get('/', async (req, res) => {
         skip,
         take: limitNum
       }),
-      // Use a more efficient count query for large datasets
+      // Use optimized count query
       lotNumber ? 
         prisma.item.count({ where: { lotNumber: parseInt(String(lotNumber)) } }) :
       prisma.item.count({ where })
@@ -1256,6 +1255,9 @@ router.delete('/:id', async (req, res) => {
       where: { id: itemId }
     });
 
+    // Invalidate dashboard cache since stats may have changed
+    invalidateDashboardCache();
+
     return res.json({
       success: true,
       message: 'Item deleted successfully'
@@ -1388,6 +1390,9 @@ router.patch('/:id', async (req, res) => {
       }
     }
 
+    // Invalidate dashboard cache since stats may have changed
+    invalidateDashboardCache();
+
     return res.json({
       success: true,
       data: updatedItem,
@@ -1484,6 +1489,9 @@ router.patch('/bulk-location', async (req, res) => {
     });
 
     await Promise.all(statusHistoryPromises);
+
+    // Invalidate dashboard cache since stats may have changed
+    invalidateDashboardCache();
 
     return res.json({
       success: true,
@@ -1680,6 +1688,9 @@ router.post('/update-dates', async (req, res): Promise<any> => {
       await Promise.allSettled(cogsPromises);
       console.log(`COGS tracking: Processed ${allAffectedItemIds.length} sold items for COGS recording`);
     }
+
+    // Invalidate dashboard cache since stats may have changed
+    invalidateDashboardCache();
 
     return res.json({
       success: true,
