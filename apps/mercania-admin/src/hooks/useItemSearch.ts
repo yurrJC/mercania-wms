@@ -20,12 +20,6 @@ export interface SearchResult {
   lastSearchTerm: string;
 }
 
-export interface ApiError {
-  message: string;
-  status?: number;
-  code?: string;
-}
-
 // Custom error class
 class ApiError extends Error {
   constructor(message: string, public status?: number, public code?: string) {
