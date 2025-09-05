@@ -1,121 +1,175 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// eBay Product Catalog API lookup for CDs
+// Rate limiting for MusicBrainz API (max 1 call per second)
+let lastApiCall = 0;
+const API_CALL_INTERVAL = 1000; // 1 second in milliseconds
+
+const rateLimitMusicBrainz = async () => {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastApiCall;
+  
+  if (timeSinceLastCall < API_CALL_INTERVAL) {
+    const waitTime = API_CALL_INTERVAL - timeSinceLastCall;
+    console.log(`Rate limiting: waiting ${waitTime}ms before next MusicBrainz API call`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastApiCall = Date.now();
+};
+
+// MusicBrainz API lookup for CDs
 const lookupCDByBarcode = async (barcode: string) => {
   try {
-    // Use user OAuth token directly (no need for app credentials)
-    const EBAY_USER_TOKEN = process.env.EBAY_USER_TOKEN;
+    console.log(`Looking up CD barcode ${barcode} with MusicBrainz...`);
 
-    console.log('eBay User Token check:', {
-      EBAY_USER_TOKEN: EBAY_USER_TOKEN ? 'SET' : 'NOT SET'
-    });
+    // Apply rate limiting
+    await rateLimitMusicBrainz();
 
-    if (!EBAY_USER_TOKEN) {
-      console.log('eBay User Token not configured, falling back to manual entry');
-      throw new Error('eBay User Token not configured. Please use manual entry.');
-    }
-
-    const accessToken = EBAY_USER_TOKEN;
-    console.log('Using eBay user token for API calls');
-
-    // Use the access token to search the Catalog API by UPC
-    // Category IDs for Music & CDs (example, can be refined)
-    const categoryIds = '11233,176985,3270,306'; // Common eBay categories for music/CDs
-    const searchUrl = `https://api.ebay.com/commerce/catalog/v1/product_summary/search?upc=${barcode}&category_ids=${categoryIds}`;
-
-    console.log(`Looking up barcode ${barcode} with eBay...`);
-    const productResponse = await fetch(searchUrl, {
+    // MusicBrainz API endpoint for barcode search
+    const musicbrainzUrl = `https://musicbrainz.org/ws/2/release?query=barcode:${barcode}&fmt=json&inc=artist-credits+recordings+release-groups+media+labels`;
+    
+    const response = await fetch(musicbrainzUrl, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_AU', // Target Australian marketplace
-        'Content-Type': 'application/json'
+        'User-Agent': 'Mercania-WMS/1.0 (https://mercania-wms.com)',
+        'Accept': 'application/json'
       }
     });
 
-    if (!productResponse.ok) {
-      console.error('eBay API Error:', productResponse.status, productResponse.statusText);
-      throw new Error('Failed to fetch CD data from eBay');
+    if (!response.ok) {
+      console.error('MusicBrainz API Error:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('MusicBrainz API error response:', errorText);
+      throw new Error(`MusicBrainz API error: ${response.status} ${response.statusText}`);
     }
 
-    const productData = await productResponse.json() as any;
+    const data = await response.json() as any;
 
-    if (!productData.productSummaries || productData.productSummaries.length === 0) {
-      throw new Error('CD not found in eBay catalog');
+    if (!data.releases || data.releases.length === 0) {
+      throw new Error('CD not found in MusicBrainz database');
     }
 
-    const product = productData.productSummaries[0]; // Take the first result
-
-    // Extract relevant metadata
-    const title = product.title;
-    const imageUrl = product.image?.imageUrl || null;
-
-    // Extract aspects for artist, label, year, genre, format
-    let artist = 'Unknown Artist';
+    // Get the first release (most relevant match)
+    const release = data.releases[0];
+    
+    // Extract basic information
+    const title = release.title || 'Unknown Title';
+    const artist = release['artist-credit']?.[0]?.name || 'Unknown Artist';
+    const releaseDate = release.date || null;
+    const country = release.country || 'Unknown';
+    
+    // Extract additional metadata
     let label = 'Unknown Label';
-    let releaseYear = null;
+    let catalogNumber = 'Unknown';
+    let format = 'CD';
     let genre = 'Unknown Genre';
-    let format = 'CD'; // Default format
-    let runtime = null;
+    let trackCount = 0;
+    let duration = 0;
 
-    if (product.aspects) {
-      product.aspects.forEach((aspect: any) => {
-        switch (aspect.localizedName) {
-          case 'Artist':
-          case 'Performer':
-            artist = aspect.localizedValues[0];
-            break;
-          case 'Record Label':
-          case 'Label':
-            label = aspect.localizedValues[0];
-            break;
-          case 'Release Year':
-          case 'Year':
-            releaseYear = parseInt(aspect.localizedValues[0]);
-            break;
-          case 'Genre':
-            genre = aspect.localizedValues[0];
-            break;
-          case 'Format':
-            format = aspect.localizedValues[0];
-            break;
-          case 'Duration':
-          case 'Runtime':
-            // Runtime might be in "60 min" format, extract number
-            const runtimeMatch = aspect.localizedValues[0].match(/(\d+)\s*min/);
-            if (runtimeMatch) {
-              runtime = parseInt(runtimeMatch[1]);
-            }
-            break;
-        }
-      });
+    // Get label information from label-info array
+    if (release['label-info'] && release['label-info'].length > 0) {
+      const labelInfo = release['label-info'][0];
+      label = labelInfo.label?.name || 'Unknown Label';
+      catalogNumber = labelInfo['catalog-number'] || 'Unknown';
     }
+
+    // Get format and track information from media
+    if (release.media && release.media.length > 0) {
+      const media = release.media[0];
+      format = media.format || 'CD';
+      trackCount = media['track-count'] || 0;
+      
+      // Calculate total duration from tracks
+      if (media.tracks && Array.isArray(media.tracks)) {
+        duration = media.tracks.reduce((total: number, track: any) => {
+          return total + (track.length || 0);
+        }, 0);
+      }
+    }
+
+    // Get genre from release group primary type
+    if (release['release-group'] && release['release-group']['primary-type']) {
+      genre = release['release-group']['primary-type'];
+    }
+
+    // Try to get secondary type as well
+    if (release['release-group'] && release['release-group']['secondary-types'] && 
+        release['release-group']['secondary-types'].length > 0) {
+      const secondaryType = release['release-group']['secondary-types'][0];
+      if (secondaryType) {
+        genre = `${genre} (${secondaryType})`;
+      }
+    }
+
+    // Get cover art URL (from Cover Art Archive)
+    let coverArtUrl = null;
+    if (release.id) {
+      coverArtUrl = `https://coverartarchive.org/release/${release.id}/front-250`;
+    }
+
+    console.log(`Successfully retrieved CD data: ${artist} - ${title}`);
 
     return {
-      barcode,
-      title,
-      artist,
-      label,
-      releaseYear,
-      format,
-      genre,
-      runtime,
-      imageUrl
+      barcode: barcode,
+      title: title,
+      artist: artist,
+      label: label,
+      catalogNumber: catalogNumber,
+      releaseDate: releaseDate,
+      country: country,
+      format: format,
+      genre: genre,
+      trackCount: trackCount,
+      duration: duration, // in milliseconds
+      coverArtUrl: coverArtUrl,
+      musicbrainzId: release.id
     };
 
-  } catch (error: any) {
-    console.error('eBay API Error:', error.message);
+  } catch (error) {
+    console.error('MusicBrainz API Error:', error);
     throw error;
   }
 };
 
-// GET /api/intake/cd/:barcode - Lookup CD metadata by barcode
+// Check for existing CDs by barcode
+const checkDuplicateCD = async (barcode: string) => {
+  const existingItems = await prisma.item.findMany({
+    where: {
+      isbnMaster: {
+        isbn: barcode
+      }
+    },
+    select: {
+      id: true,
+      currentStatus: true,
+      intakeDate: true,
+      currentLocation: true
+    },
+    orderBy: {
+      intakeDate: 'desc'
+    }
+  });
+
+  if (existingItems.length > 0) {
+    return {
+      isDuplicate: true,
+      message: `Warning: ${existingItems.length} CD(s) with this barcode already exist in inventory.`,
+      existingItems: existingItems.map(item => ({
+        id: item.id,
+        status: item.currentStatus,
+        intakeDate: item.intakeDate.toLocaleDateString(),
+        location: item.currentLocation
+      }))
+    };
+  }
+
+  return { isDuplicate: false };
+};
+
+// GET /api/intake/cd/:barcode - Lookup CD metadata by barcode using MusicBrainz
 router.get('/:barcode', async (req, res) => {
   const { barcode } = req.params;
 
@@ -124,8 +178,18 @@ router.get('/:barcode', async (req, res) => {
   }
 
   try {
+    // Check for duplicates first
+    const duplicateCheck = await checkDuplicateCD(barcode);
+    
+    // Lookup CD data from MusicBrainz
     const cdData = await lookupCDByBarcode(barcode);
-    res.json({ success: true, data: cdData });
+    
+    // Include duplicate information in the response
+    res.json({ 
+      success: true, 
+      data: cdData,
+      duplicate: duplicateCheck.isDuplicate ? duplicateCheck : null
+    });
   } catch (error: any) {
     console.error('CD lookup error:', error.message);
     res.status(error.message.includes('not found') ? 404 : 500).json({ success: false, error: error.message });
