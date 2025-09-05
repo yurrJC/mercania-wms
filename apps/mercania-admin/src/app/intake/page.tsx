@@ -604,8 +604,17 @@ export default function IntakePage() {
     setCdData(null);
     setDuplicateWarning(null);
     
+    // Clean the barcode - remove leading/trailing spaces
+    const cleanBarcode = barcode.trim();
+    
+    if (!cleanBarcode) {
+      setError('Please enter a barcode');
+      setIsLoading(false);
+      return;
+    }
+    
     try {
-      const response = await apiCall(`/api/intake/cd/${barcode}`);
+      const response = await apiCall(`/api/intake/cd/${cleanBarcode}`);
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -649,10 +658,11 @@ export default function IntakePage() {
   };
 
   const handleCDBarcodeScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && barcodeInput.trim() && !isLoading && !cdManualEntry) {
+    const trimmedBarcode = barcodeInput.trim();
+    if (e.key === 'Enter' && trimmedBarcode && !isLoading && !cdManualEntry) {
       e.preventDefault();
-      if (barcodeInput.length >= 8) {
-        fetchCDData(barcodeInput);
+      if (trimmedBarcode.length >= 8) {
+        fetchCDData(trimmedBarcode);
       }
     }
   };
@@ -956,7 +966,7 @@ export default function IntakePage() {
                 type="text"
                 id="isbn"
                 value={isbnInput}
-                onChange={(e) => setIsbnInput(e.target.value.replace(/\D/g, ''))}
+                onChange={(e) => setIsbnInput(e.target.value.replace(/\D/g, '').trim())}
                 onKeyPress={handleIsbnKeyPress}
                 placeholder="Scan barcode or type ISBN..."
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-mono"
@@ -1209,7 +1219,7 @@ export default function IntakePage() {
                         type="text"
                     id="upc"
                     value={upcInput}
-                    onChange={(e) => setUpcInput(e.target.value.replace(/\D/g, ''))}
+                    onChange={(e) => setUpcInput(e.target.value.replace(/\D/g, '').trim())}
                     onKeyPress={handleUpcKeyPress}
                     placeholder="Scan barcode or type UPC..."
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg font-mono"
@@ -1472,7 +1482,7 @@ export default function IntakePage() {
                     type="text"
                     id="barcode"
                     value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    onChange={(e) => setBarcodeInput(e.target.value.trim())}
                     onKeyPress={handleCDBarcodeScan}
                     placeholder="Scan or enter CD barcode (EAN/UPC)"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
@@ -1482,8 +1492,8 @@ export default function IntakePage() {
                 
                 <div className="flex gap-2">
               <button
-                    onClick={() => fetchCDData(barcodeInput)}
-                    disabled={isLoading || barcodeInput.length < 8 || cdManualEntry}
+                    onClick={() => fetchCDData(barcodeInput.trim())}
+                    disabled={isLoading || barcodeInput.trim().length < 8 || cdManualEntry}
                     className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
                   >
                     {isLoading ? 'Looking up...' : 'Lookup'}
