@@ -68,8 +68,8 @@ const lookupDVDByUPC = async (upc: string) => {
     let rating = '';
     let runtime = null;
 
-    if (productDetails?.product?.aspects) {
-      const aspects = productDetails.product.aspects;
+    if (product?.aspects) {
+      const aspects = product.aspects;
       
       // Extract director
       const directorAspect = aspects.find((a: any) => 
