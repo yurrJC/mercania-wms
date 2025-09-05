@@ -790,8 +790,6 @@ import lotsRoutes from './routes/lots.js';
 import cogRoutes from './routes/cog.js';
 import cogsRoutes from './routes/cogs.js';
 import salesRoutes from './routes/sales.js';
-import dvdRoutes from './routes/dvd.js';
-import cdRoutes from './routes/cd.js';
 import { authenticateToken } from './middleware/auth.js';
 
 // Public auth routes (no authentication required)
@@ -805,8 +803,6 @@ app.use('/api/lots', authenticateToken, lotsRoutes);
 app.use('/api/cog', authenticateToken, cogRoutes);
 app.use('/api/cogs', authenticateToken, cogsRoutes);
 app.use('/api/sales', authenticateToken, salesRoutes);
-app.use('/api/dvd', authenticateToken, dvdRoutes);
-app.use('/api/cd', authenticateToken, cdRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
