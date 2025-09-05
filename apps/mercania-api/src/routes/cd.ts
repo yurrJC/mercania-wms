@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 // eBay Product Catalog API lookup for CDs
 const lookupCDByBarcode = async (barcode: string) => {
   try {
-    const EBAY_APP_ID = process.env.EBAY_CLIENT_ID;
+    const EBAY_APP_ID = process.env.EBAY_APP_ID;
     const EBAY_DEV_ID = process.env.EBAY_DEV_ID;
     const EBAY_CLIENT_SECRET = process.env.EBAY_CLIENT_SECRET;
 

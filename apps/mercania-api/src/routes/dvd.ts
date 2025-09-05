@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 const lookupDVDByUPC = async (upc: string) => {
   try {
     // Note: You'll need to add your eBay API credentials to environment variables
-    const EBAY_APP_ID = process.env.EBAY_CLIENT_ID;
+    const EBAY_APP_ID = process.env.EBAY_APP_ID;
     const EBAY_DEV_ID = process.env.EBAY_DEV_ID;
     const EBAY_CLIENT_SECRET = process.env.EBAY_CLIENT_SECRET;
 
