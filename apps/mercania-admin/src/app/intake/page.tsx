@@ -46,10 +46,15 @@ interface CDData {
   title: string;
   artist: string;
   label: string;
-  releaseYear: number;
-  genre: string;
-  runtime: number;
+  catalogNumber: string;
+  releaseDate: string | null;
+  country: string;
   format: string;
+  genre: string;
+  trackCount: number;
+  duration: number;
+  coverArtUrl?: string;
+  musicbrainzId: string;
 }
 
 interface IntakeFormData {
@@ -636,10 +641,10 @@ export default function IntakePage() {
         title: data.title,
         artist: data.artist,
         label: data.label,
-        releaseYear: data.releaseYear,
+        releaseYear: data.releaseDate ? new Date(data.releaseDate).getFullYear() : null,
         format: data.format,
         genre: data.genre,
-        runtime: data.runtime,
+        runtime: data.duration ? Math.round(data.duration / 60000) : null, // Convert milliseconds to minutes
         conditionGrade: 'GOOD',
         conditionNotes: '',
         costCents: 0
@@ -675,10 +680,14 @@ export default function IntakePage() {
       title: '',
       artist: '',
       label: '',
-      releaseYear: new Date().getFullYear(),
+      catalogNumber: '',
+      releaseDate: new Date().toISOString(),
+      country: '',
       format: 'CD',
       genre: '',
-      runtime: 0
+      trackCount: 0,
+      duration: 0,
+      musicbrainzId: ''
     });
     setCdFormData(prev => ({
       ...prev,
@@ -712,6 +721,7 @@ export default function IntakePage() {
           publisher: cdFormData.label, // Label maps to publisher field
           pubYear: cdFormData.releaseYear,
           binding: cdFormData.format, // Format maps to binding field
+          imageUrl: cdData?.coverArtUrl || null, // Include cover art URL
           conditionGrade: cdFormData.conditionGrade,
           conditionNotes: cdFormData.conditionNotes,
           costCents: Math.round((cdFormData.costCents || 0) * 100),
@@ -1519,6 +1529,22 @@ export default function IntakePage() {
                     {cdManualEntry ? 'CD Information (Manual Entry)' : 'CD Information (Editable)'}
                   </h2>
                 </div>
+
+                {/* Cover Art Display */}
+                {cdData?.coverArtUrl && (
+                  <div className="mb-6 flex justify-center">
+                    <div className="relative">
+                      <img 
+                        src={cdData.coverArtUrl} 
+                        alt={`Cover of ${cdData.title}`}
+                        className="w-32 h-32 object-cover rounded-lg shadow-md border border-gray-200"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <form onSubmit={handleCDSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
