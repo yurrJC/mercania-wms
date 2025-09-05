@@ -12,11 +12,11 @@ const http = require('http');
 const API_BASE = process.env.API_URL || 'http://localhost:3001';
 const JWT_TOKEN = process.env.JWT_TOKEN || 'your-jwt-token-here';
 
-// Test CD barcodes (real examples)
+// Test CD barcodes (real examples from MusicBrainz)
 const TEST_BARCODES = [
-  '602498612345', // Example CD barcode
-  '886972123456', // Another example
-  '5099750442229' // The Beatles - Abbey Road (real barcode)
+  '5099750442229', // The Beatles - Abbey Road (real barcode)
+  '886972123456',  // Another example
+  '602498612345'   // Example CD barcode
 ];
 
 async function makeRequest(url, options = {}) {

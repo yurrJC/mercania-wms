@@ -170,8 +170,8 @@ const lookupDVDByUPCWithAuthnAuth = async (upc: string) => {
 
 // Check for existing DVDs by UPC
 const checkDuplicateDVD = async (upc: string) => {
-  const existingDVD = await prisma.dVD.findFirst({
-    where: { upc: upc }
+  const existingDVD = await prisma.isbnMaster.findFirst({
+    where: { isbn: upc }
   });
   return existingDVD;
 };

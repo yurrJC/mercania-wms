@@ -4,13 +4,34 @@ import { PrismaClient } from '@prisma/client';
 const router = express.Router();
 const prisma = new PrismaClient();
 
+// Rate limiting for MusicBrainz API (max 1 call per second)
+let lastApiCall = 0;
+const API_CALL_INTERVAL = 1000; // 1 second in milliseconds
+
+const rateLimitMusicBrainz = async () => {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastApiCall;
+  
+  if (timeSinceLastCall < API_CALL_INTERVAL) {
+    const waitTime = API_CALL_INTERVAL - timeSinceLastCall;
+    console.log(`Rate limiting: waiting ${waitTime}ms before next MusicBrainz API call`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastApiCall = Date.now();
+};
+
 // MusicBrainz API lookup for CDs
 const lookupCDByBarcode = async (barcode: string) => {
   try {
     console.log(`Looking up CD barcode ${barcode} with MusicBrainz...`);
 
-    // MusicBrainz API endpoint for barcode lookup
-    const musicbrainzUrl = `https://musicbrainz.org/ws/2/release?query=barcode:${barcode}&fmt=json&inc=artist-credits+recordings+release-groups+media`;
+    // Apply rate limiting
+    await rateLimitMusicBrainz();
+
+    // MusicBrainz API endpoint for barcode search
+    // Using search instead of direct barcode lookup for better results
+    const musicbrainzUrl = `https://musicbrainz.org/ws/2/release?query=barcode:${barcode}&fmt=json&inc=artist-credits+recordings+release-groups+media+labels`;
     
     const response = await fetch(musicbrainzUrl, {
       headers: {
@@ -21,7 +42,9 @@ const lookupCDByBarcode = async (barcode: string) => {
 
     if (!response.ok) {
       console.error('MusicBrainz API Error:', response.status, response.statusText);
-      throw new Error('Failed to fetch CD data from MusicBrainz');
+      const errorText = await response.text();
+      console.error('MusicBrainz API error response:', errorText);
+      throw new Error(`MusicBrainz API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json() as any;
@@ -47,30 +70,39 @@ const lookupCDByBarcode = async (barcode: string) => {
     let trackCount = 0;
     let duration = 0;
 
-    // Get label information
+    // Get label information from label-info array
     if (release['label-info'] && release['label-info'].length > 0) {
       const labelInfo = release['label-info'][0];
       label = labelInfo.label?.name || 'Unknown Label';
       catalogNumber = labelInfo['catalog-number'] || 'Unknown';
     }
 
-    // Get format information
+    // Get format and track information from media
     if (release.media && release.media.length > 0) {
       const media = release.media[0];
       format = media.format || 'CD';
       trackCount = media['track-count'] || 0;
       
-      // Calculate total duration
-      if (media.tracks) {
+      // Calculate total duration from tracks
+      if (media.tracks && Array.isArray(media.tracks)) {
         duration = media.tracks.reduce((total: number, track: any) => {
           return total + (track.length || 0);
         }, 0);
       }
     }
 
-    // Get genre from release group
+    // Get genre from release group primary type
     if (release['release-group'] && release['release-group']['primary-type']) {
       genre = release['release-group']['primary-type'];
+    }
+
+    // Try to get secondary type as well
+    if (release['release-group'] && release['release-group']['secondary-types'] && 
+        release['release-group']['secondary-types'].length > 0) {
+      const secondaryType = release['release-group']['secondary-types'][0];
+      if (secondaryType) {
+        genre = `${genre} (${secondaryType})`;
+      }
     }
 
     // Get cover art URL (from Cover Art Archive)
@@ -105,8 +137,8 @@ const lookupCDByBarcode = async (barcode: string) => {
 
 // Check for existing CDs by barcode
 const checkDuplicateCD = async (barcode: string) => {
-  const existingCD = await prisma.cD.findFirst({
-    where: { barcode: barcode }
+  const existingCD = await prisma.isbnMaster.findFirst({
+    where: { isbn: barcode }
   });
   return existingCD;
 };
@@ -163,6 +195,9 @@ router.get('/search', async (req, res) => {
     } else if (title) {
       query = `release:"${title}"`;
     }
+
+    // Apply rate limiting
+    await rateLimitMusicBrainz();
 
     const musicbrainzUrl = `https://musicbrainz.org/ws/2/release?query=${encodeURIComponent(query)}&fmt=json&inc=artist-credits+recordings+release-groups+media&limit=10`;
     
