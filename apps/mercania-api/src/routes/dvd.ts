@@ -30,7 +30,7 @@ const lookupDVDByUPC = async (upc: string) => {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Basic ${Buffer.from(`${EBAY_APP_ID}:${EBAY_CLIENT_SECRET}`).toString('base64')}`
       },
-      body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope'
+      body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/commerce.catalog.readonly'
     });
 
     if (!tokenResponse.ok) {
@@ -45,7 +45,7 @@ const lookupDVDByUPC = async (upc: string) => {
     console.log('eBay access token obtained successfully');
 
     // Search for product by UPC using eBay Product Catalog API
-    const searchUrl = `https://api.ebay.com/commerce/catalog/v1/product_summary/search?upc=${upc}&category_ids=11232,617,1249,11233,63861`;
+    const searchUrl = `https://api.ebay.com/commerce/catalog/v1_beta/product_summary/search?upc=${upc}&category_ids=11232,617,1249,11233,63861`;
     
     console.log(`Looking up UPC ${upc} with eBay...`);
     
@@ -74,25 +74,12 @@ const lookupDVDByUPC = async (upc: string) => {
     // Get the first product summary
     const product = data.productSummaries[0];
     
-    // Get detailed product information
-    const detailUrl = `https://api.ebay.com/commerce/catalog/v1/product/${product.epid}`;
-    const detailResponse = await fetch(detailUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_AU'
-      }
-    });
+    // For Browse API, we get the data directly from the search results
+    // No need for additional detail API call
 
-    let productDetails = null;
-    if (detailResponse.ok) {
-      productDetails = await detailResponse.json();
-    }
-
-    // Extract and format the data
-    const title = product.title || productDetails?.product?.title || 'Unknown Title';
-    const brand = product.brand || productDetails?.product?.brand || '';
+    // Extract and format the data from Browse API response
+    const title = product.title || 'Unknown Title';
+    const brand = product.brand || '';
     
     // Extract additional details from product aspects
     let director = '';
