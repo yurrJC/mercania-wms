@@ -32,6 +32,24 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Mercania WMS API', 
+    status: 'OK', 
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      items: '/api/items',
+      intake: '/api/intake',
+      sales: '/api/sales',
+      reports: '/api/reports'
+    }
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
@@ -804,7 +822,7 @@ async function startServer() {
     await prisma.$connect();
     console.log('✅ Database connected successfully');
 
-    app.listen(port, () => {
+    app.listen(port, '0.0.0.0', () => {
       console.log(`🚀 Mercania API server running on port ${port}`);
       console.log(`📊 Health check: http://localhost:${port}/health`);
     });
