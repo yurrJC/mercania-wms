@@ -277,11 +277,15 @@ router.get('/records', async (req, res) => {
         select: {
           id: true,
           isbn: true,
-          title: true,
-          author: true,
           priceCents: true,
           costCents: true,
           soldDate: true,
+          isbnMaster: {
+            select: {
+              title: true,
+              author: true,
+            }
+          },
           createdAt: true,
           currentLocation: true,
         },
@@ -294,9 +298,11 @@ router.get('/records', async (req, res) => {
       }),
     ]);
 
-    // Calculate profit margins
+    // Calculate profit margins and flatten isbnMaster data
     const recordsWithMargins = salesRecords.map(record => ({
       ...record,
+      title: record.isbnMaster?.title || 'Unknown Title',
+      author: record.isbnMaster?.author || 'Unknown Author',
       profitCents: (record.priceCents || 0) - (record.costCents || 0),
       marginPercent: record.priceCents > 0 
         ? (((record.priceCents || 0) - (record.costCents || 0)) / (record.priceCents || 1)) * 100
