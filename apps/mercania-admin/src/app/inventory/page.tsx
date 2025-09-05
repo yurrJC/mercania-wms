@@ -13,6 +13,8 @@ import {
   Calendar,
   DollarSign,
   BookOpen,
+  Music,
+  Play,
   Plus,
   RefreshCw,
   Trash2,
@@ -1218,7 +1220,7 @@ export default function InventoryPage() {
                               {item.isbnMaster?.imageUrl ? (
                                 <img 
                                   src={item.isbnMaster.imageUrl} 
-                                  alt="Book cover"
+                                  alt={`${item.isbnMaster.binding || 'Product'} cover`}
                                   className="h-16 w-12 object-cover rounded"
                                   onError={(e) => {
                                     console.log('Image failed to load:', item.isbnMaster.imageUrl);
@@ -1231,7 +1233,13 @@ export default function InventoryPage() {
                                 />
                               ) : (
                                 <div className="h-16 w-12 bg-gray-200 rounded flex items-center justify-center">
-                                  <BookOpen className="h-6 w-6 text-gray-400" />
+                                  {item.isbnMaster?.binding === 'CD' ? (
+                                    <Music className="h-6 w-6 text-gray-400" />
+                                  ) : item.isbnMaster?.binding === 'DVD' ? (
+                                    <Play className="h-6 w-6 text-gray-400" />
+                                  ) : (
+                                    <BookOpen className="h-6 w-6 text-gray-400" />
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1430,7 +1438,7 @@ export default function InventoryPage() {
                       {selectedItem.isbnMaster?.imageUrl ? (
                         <img 
                           src={selectedItem.isbnMaster.imageUrl} 
-                          alt="Book cover"
+                          alt={`${selectedItem.isbnMaster.binding || 'Product'} cover`}
                           className="h-32 w-24 object-cover rounded shadow-md"
                           onError={(e) => {
                             console.log('Detail image failed to load:', selectedItem.isbnMaster.imageUrl);
@@ -1442,7 +1450,13 @@ export default function InventoryPage() {
                         />
                       ) : (
                         <div className="h-32 w-24 bg-gray-200 rounded shadow-md flex items-center justify-center">
-                          <BookOpen className="h-8 w-8 text-gray-400" />
+                          {selectedItem.isbnMaster?.binding === 'CD' ? (
+                            <Music className="h-8 w-8 text-gray-400" />
+                          ) : selectedItem.isbnMaster?.binding === 'DVD' ? (
+                            <Play className="h-8 w-8 text-gray-400" />
+                          ) : (
+                            <BookOpen className="h-8 w-8 text-gray-400" />
+                          )}
                         </div>
                       )}
                       <div className="flex-1">
@@ -1745,12 +1759,18 @@ export default function InventoryPage() {
                               {item.isbnMaster?.imageUrl ? (
                                 <img 
                                   src={item.isbnMaster.imageUrl} 
-                                  alt="Book cover"
+                                  alt={`${item.isbnMaster.binding || 'Product'} cover`}
                                   className="h-16 w-12 object-cover rounded shadow-sm"
                                 />
                               ) : (
                                 <div className="h-16 w-12 bg-gray-200 rounded shadow-sm flex items-center justify-center">
-                                  <BookOpen className="h-6 w-6 text-gray-400" />
+                                  {item.isbnMaster?.binding === 'CD' ? (
+                                    <Music className="h-6 w-6 text-gray-400" />
+                                  ) : item.isbnMaster?.binding === 'DVD' ? (
+                                    <Play className="h-6 w-6 text-gray-400" />
+                                  ) : (
+                                    <BookOpen className="h-6 w-6 text-gray-400" />
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1835,12 +1855,18 @@ export default function InventoryPage() {
                             {item.isbnMaster?.imageUrl ? (
                               <img 
                                 src={item.isbnMaster.imageUrl} 
-                                alt="Book cover"
+                                alt={`${item.isbnMaster.binding || 'Product'} cover`}
                                 className="h-16 w-12 object-cover rounded shadow-sm"
                               />
                             ) : (
                               <div className="h-16 w-12 bg-gray-200 rounded shadow-sm flex items-center justify-center">
-                                <BookOpen className="h-6 w-6 text-gray-400" />
+                                {item.isbnMaster?.binding === 'CD' ? (
+                                  <Music className="h-6 w-6 text-gray-400" />
+                                ) : item.isbnMaster?.binding === 'DVD' ? (
+                                  <Play className="h-6 w-6 text-gray-400" />
+                                ) : (
+                                  <BookOpen className="h-6 w-6 text-gray-400" />
+                                )}
                               </div>
                             )}
                           </div>

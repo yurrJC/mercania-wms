@@ -107,8 +107,36 @@ const lookupCDByBarcode = async (barcode: string) => {
     // Get cover art URL (from Cover Art Archive)
     let coverArtUrl = null;
     if (release.id) {
-      coverArtUrl = `https://coverartarchive.org/release/${release.id}/front-250`;
+      // Try different URL formats for better compatibility
+      coverArtUrl = `https://coverartarchive.org/release/${release.id}/front-500`;
       console.log(`Cover art URL generated: ${coverArtUrl}`);
+      
+      // Test if the URL is accessible
+      try {
+        const testResponse = await fetch(coverArtUrl, { method: 'HEAD' });
+        if (!testResponse.ok) {
+          console.log(`Cover art URL not accessible: ${testResponse.status}`);
+          // Try alternative URL format
+          coverArtUrl = `https://coverartarchive.org/release/${release.id}/front`;
+          console.log(`Trying alternative URL: ${coverArtUrl}`);
+          
+          // Test the alternative URL
+          const altResponse = await fetch(coverArtUrl, { method: 'HEAD' });
+          if (!altResponse.ok) {
+            console.log(`Alternative URL also not accessible: ${altResponse.status}`);
+            // Set to null if both URLs fail
+            coverArtUrl = null;
+          } else {
+            console.log('Alternative URL is accessible');
+          }
+        } else {
+          console.log('Cover art URL is accessible');
+        }
+      } catch (error) {
+        console.log('Error testing cover art URL:', error);
+        // Set to null if there's an error
+        coverArtUrl = null;
+      }
     } else {
       console.log('No release ID found, cannot generate cover art URL');
     }
