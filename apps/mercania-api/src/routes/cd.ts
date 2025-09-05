@@ -14,6 +14,12 @@ const lookupCDByBarcode = async (barcode: string) => {
     const EBAY_DEV_ID = process.env.EBAY_DEV_ID;
     const EBAY_CLIENT_SECRET = process.env.EBAY_CLIENT_SECRET;
 
+    console.log('eBay API credentials check:', {
+      EBAY_APP_ID: EBAY_APP_ID ? 'SET' : 'NOT SET',
+      EBAY_DEV_ID: EBAY_DEV_ID ? 'SET' : 'NOT SET', 
+      EBAY_CLIENT_SECRET: EBAY_CLIENT_SECRET ? 'SET' : 'NOT SET'
+    });
+
     if (!EBAY_APP_ID || !EBAY_DEV_ID || !EBAY_CLIENT_SECRET) {
       console.log('eBay API credentials not configured, falling back to manual entry');
       throw new Error('eBay API not configured. Please use manual entry.');
