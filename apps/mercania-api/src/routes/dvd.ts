@@ -220,6 +220,7 @@ const checkDuplicateDVD = async (upc: string) => {
 
 // GET /api/dvd/:upc - Lookup DVD by UPC
 router.get('/:upc', async (req, res) => {
+  console.log('DVD route hit with UPC:', req.params.upc);
   try {
     const { upc } = req.params;
     

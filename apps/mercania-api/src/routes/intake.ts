@@ -8,7 +8,9 @@ import { invalidateDashboardCache } from '../utils/cache';
 const router = Router();
 
 // Mount DVD and CD routes
+console.log('Mounting DVD routes at /dvd');
 router.use('/dvd', dvdRoutes);
+console.log('Mounting CD routes at /cd');
 router.use('/cd', cdRoutes);
 
 // Validation schemas
