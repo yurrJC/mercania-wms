@@ -1,42 +1,25 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  env: {
-    CUSTOM_KEY: process.env.CUSTOM_KEY,
-  },
-  // Disable image optimization
+  output: 'export',
+  trailingSlash: true,
   images: {
     unoptimized: true,
   },
-  // API rewrites
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${process.env.API_URL || 'http://localhost:3001'}/api/:path*`,
-      },
-    ];
+  env: {
+    CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
-  // Disable PostCSS for production
+  // Disable all the problematic features
   experimental: {
     esmExternals: false,
   },
-  // Webpack configuration to fix build issues
-  webpack: (config, { isServer }) => {
-    // Fix for PostCSS issues
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'postcss': false,
+  // Minimal webpack config
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
     };
-    
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-      };
-    }
     return config;
   },
 }
