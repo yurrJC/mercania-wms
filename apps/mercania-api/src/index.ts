@@ -17,7 +17,7 @@ import bwipjs from 'bwip-js';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = parseInt(process.env.PORT || '3001', 10);
 
 // Initialize Prisma client
 export const prisma = new PrismaClient();
