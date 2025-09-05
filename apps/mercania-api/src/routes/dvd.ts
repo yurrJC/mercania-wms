@@ -34,11 +34,15 @@ const lookupDVDByUPC = async (upc: string) => {
     });
 
     if (!tokenResponse.ok) {
+      console.error('eBay token request failed:', tokenResponse.status, tokenResponse.statusText);
+      const errorText = await tokenResponse.text();
+      console.error('eBay token error response:', errorText);
       throw new Error('Failed to get eBay access token');
     }
 
     const tokenData = await tokenResponse.json() as any;
     const accessToken = tokenData.access_token;
+    console.log('eBay access token obtained successfully');
 
     // Search for product by UPC using eBay Product Catalog API
     const searchUrl = `https://api.ebay.com/commerce/catalog/v1/product_summary/search?upc=${upc}&category_ids=11232,617,1249,11233,63861`;
@@ -56,6 +60,8 @@ const lookupDVDByUPC = async (upc: string) => {
 
     if (!response.ok) {
       console.error('eBay API Error:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('eBay API error response:', errorText);
       throw new Error('DVD not found in eBay catalog');
     }
 
