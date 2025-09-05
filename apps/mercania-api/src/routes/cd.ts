@@ -10,37 +10,20 @@ const prisma = new PrismaClient();
 // eBay Product Catalog API lookup for CDs
 const lookupCDByBarcode = async (barcode: string) => {
   try {
-    const EBAY_APP_ID = process.env.EBAY_APP_ID;
-    const EBAY_DEV_ID = process.env.EBAY_DEV_ID;
-    const EBAY_CLIENT_SECRET = process.env.EBAY_CLIENT_SECRET;
+    // Use user OAuth token directly (no need for app credentials)
+    const EBAY_USER_TOKEN = process.env.EBAY_USER_TOKEN;
 
-    console.log('eBay API credentials check:', {
-      EBAY_APP_ID: EBAY_APP_ID ? 'SET' : 'NOT SET',
-      EBAY_DEV_ID: EBAY_DEV_ID ? 'SET' : 'NOT SET', 
-      EBAY_CLIENT_SECRET: EBAY_CLIENT_SECRET ? 'SET' : 'NOT SET'
+    console.log('eBay User Token check:', {
+      EBAY_USER_TOKEN: EBAY_USER_TOKEN ? 'SET' : 'NOT SET'
     });
 
-    if (!EBAY_APP_ID || !EBAY_DEV_ID || !EBAY_CLIENT_SECRET) {
-      console.log('eBay API credentials not configured, falling back to manual entry');
-      throw new Error('eBay API not configured. Please use manual entry.');
+    if (!EBAY_USER_TOKEN) {
+      console.log('eBay User Token not configured, falling back to manual entry');
+      throw new Error('eBay User Token not configured. Please use manual entry.');
     }
 
-    // First, get an access token using App ID and Client Secret
-    const tokenResponse = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${Buffer.from(`${EBAY_APP_ID}:${EBAY_CLIENT_SECRET}`).toString('base64')}`
-      },
-      body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope'
-    });
-
-    if (!tokenResponse.ok) {
-      console.error('eBay API Error:', tokenResponse.status, tokenResponse.statusText);
-      throw new Error('Failed to get eBay access token');
-    }
-    const tokenData = await tokenResponse.json() as any;
-    const accessToken = tokenData.access_token;
+    const accessToken = EBAY_USER_TOKEN;
+    console.log('Using eBay user token for API calls');
 
     // Use the access token to search the Catalog API by UPC
     // Category IDs for Music & CDs (example, can be refined)
