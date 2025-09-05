@@ -5,20 +5,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  env: {
-    CUSTOM_KEY: process.env.CUSTOM_KEY,
-  },
-  // Disable all the problematic features
-  experimental: {
-    esmExternals: false,
-  },
+  // Disable all experimental features
+  experimental: {},
   // Minimal webpack config
   webpack: (config) => {
     config.resolve.fallback = {
-      ...config.resolve.fallback,
       fs: false,
       net: false,
       tls: false,
+      crypto: false,
     };
     return config;
   },
