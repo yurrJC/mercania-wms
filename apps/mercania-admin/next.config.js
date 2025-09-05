@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Ultra-minimal configuration for production build
-  reactStrictMode: false,
-  swcMinify: false,
+  // Static export configuration for Render
+  output: 'export',
+  trailingSlash: true,
+  images: {
+    unoptimized: true,
+  },
   // Disable all experimental features
   experimental: {},
   // Disable webpack optimizations
