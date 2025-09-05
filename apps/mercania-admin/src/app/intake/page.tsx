@@ -196,7 +196,7 @@ export default function IntakePage() {
     setDuplicateWarning(null);
     
     try {
-      const response = await apiCall(`http://localhost:3001/api/intake/${isbn}`);
+      const response = await apiCall(`/api/intake/${isbn}`);
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -245,7 +245,7 @@ export default function IntakePage() {
     setDuplicateWarning(null);
     
     try {
-      const response = await apiCall(`http://localhost:3001/api/intake/dvd/${upc}`);
+      const response = await apiCall(`/api/intake/dvd/${upc}`);
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -297,7 +297,7 @@ export default function IntakePage() {
     setError('');
 
     try {
-      const response = await apiCall('http://localhost:3001/api/intake', {
+      const response = await apiCall('/api/intake', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -339,7 +339,7 @@ export default function IntakePage() {
     setError('');
     
     try {
-      const response = await apiCall('http://localhost:3001/api/intake', {
+      const response = await apiCall('/api/intake', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -392,7 +392,7 @@ export default function IntakePage() {
   const loadPrinters = async () => {
     setIsLoadingPrinters(true);
     try {
-      const response = await apiCall('http://localhost:3001/api/printers');
+      const response = await apiCall('/api/printers');
       const data = await response.json();
       setAvailablePrinters(data.printers || []);
       if (data.printers && data.printers.length > 0) {
@@ -416,7 +416,7 @@ export default function IntakePage() {
       const itemTitle = bookData?.title || dvdData?.title || cdData?.title || 'Unknown Item';
       
       // Use new 80x40mm label endpoint with POST method
-      const response = await apiCall('http://localhost:3001/labels', {
+      const response = await apiCall('/labels', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -605,7 +605,7 @@ export default function IntakePage() {
     setDuplicateWarning(null);
     
     try {
-      const response = await apiCall(`http://localhost:3001/api/intake/cd/${barcode}`);
+      const response = await apiCall(`/api/intake/cd/${barcode}`);
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -690,7 +690,7 @@ export default function IntakePage() {
     setError('');
     
     try {
-      const response = await apiCall('http://localhost:3001/api/intake', {
+      const response = await apiCall('/api/intake', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
