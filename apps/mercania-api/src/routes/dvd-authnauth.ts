@@ -1,27 +1,32 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { createAuthnAuthFromEnv } from '../utils/ebayAuthnAuth';
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// eBay Product Catalog API lookup
-const lookupDVDByUPC = async (upc: string) => {
+// eBay Product Catalog API lookup using Auth'n'Auth
+const lookupDVDByUPCWithAuthnAuth = async (upc: string) => {
   try {
-    // Use user OAuth token directly (no need for app credentials)
-    const EBAY_USER_TOKEN = process.env.EBAY_USER_TOKEN;
-
-    console.log('eBay User Token check:', {
-      EBAY_USER_TOKEN: EBAY_USER_TOKEN ? 'SET' : 'NOT SET'
-    });
-
-    if (!EBAY_USER_TOKEN) {
-      console.log('eBay User Token not configured, falling back to manual entry');
-      throw new Error('eBay User Token not configured. Please use manual entry.');
+    // Try to get user token from environment first
+    let userToken = process.env.EBAY_USER_TOKEN;
+    
+    if (!userToken) {
+      console.log('No user token found, attempting to get one via Auth\'n\'Auth...');
+      
+      try {
+        const authnAuth = createAuthnAuthFromEnv();
+        // Note: In a real implementation, you'd need to handle the full Auth'n'Auth flow
+        // which requires user interaction. For now, we'll assume you have a user token.
+        throw new Error('Auth\'n\'Auth user token not available. Please set EBAY_USER_TOKEN or complete the Auth\'n\'Auth flow.');
+      } catch (error) {
+        console.error('Auth\'n\'Auth setup error:', error);
+        throw new Error('eBay authentication not configured. Please set EBAY_USER_TOKEN or configure Auth\'n\'Auth credentials.');
+      }
     }
 
-    const accessToken = EBAY_USER_TOKEN;
     console.log('Using eBay user token for API calls');
-    console.log('Token format:', accessToken.substring(0, 20) + '...');
+    console.log('Token format:', userToken.substring(0, 20) + '...');
 
     // Search for product by UPC using eBay Product Catalog API
     const searchUrl = `https://api.ebay.com/commerce/catalog/v1/product_summary/search?upc=${upc}&category_ids=11232,617,1249,11233,63861`;
@@ -31,7 +36,7 @@ const lookupDVDByUPC = async (upc: string) => {
     const response = await fetch(searchUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${userToken}`,
         'Content-Type': 'application/json',
         'X-EBAY-C-MARKETPLACE-ID': 'EBAY_AU' // Australia marketplace
       }
@@ -53,32 +58,52 @@ const lookupDVDByUPC = async (upc: string) => {
     // Get the first product summary
     const product = data.productSummaries[0];
     
-    // For Browse API, we get the data directly from the search results
-    // No need for additional detail API call
-
     // Extract and format the data from Browse API response
     const title = product.title || 'Unknown Title';
     const brand = product.brand || '';
     
     // Extract additional details from product aspects
-    let director = '';
-    let studio = brand;
+    let director = 'Unknown Director';
+    let studio = 'Unknown Studio';
     let releaseYear = null;
-    let format = 'DVD';
-    let genre = '';
-    let rating = '';
+    let format = 'Unknown Format';
+    let genre = 'Unknown Genre';
+    let rating = 'Unknown Rating';
     let runtime = null;
 
-    if (product?.aspects) {
+    if (product.aspects && Array.isArray(product.aspects)) {
       const aspects = product.aspects;
-      
+
       // Extract director
       const directorAspect = aspects.find((a: any) => 
         a.name?.toLowerCase().includes('director') || 
-        a.name?.toLowerCase().includes('creator')
+        a.name?.toLowerCase().includes('directed by')
       );
       if (directorAspect && directorAspect.values) {
         director = directorAspect.values[0];
+      }
+
+      // Extract studio
+      const studioAspect = aspects.find((a: any) => 
+        a.name?.toLowerCase().includes('studio') || 
+        a.name?.toLowerCase().includes('distributor') ||
+        a.name?.toLowerCase().includes('publisher')
+      );
+      if (studioAspect && studioAspect.values) {
+        studio = studioAspect.values[0];
+      }
+
+      // Extract release year
+      const yearAspect = aspects.find((a: any) => 
+        a.name?.toLowerCase().includes('year') || 
+        a.name?.toLowerCase().includes('release') ||
+        a.name?.toLowerCase().includes('publication')
+      );
+      if (yearAspect && yearAspect.values) {
+        const yearValue = parseInt(yearAspect.values[0]);
+        if (!isNaN(yearValue)) {
+          releaseYear = yearValue;
+        }
       }
 
       // Extract format
@@ -106,18 +131,6 @@ const lookupDVDByUPC = async (upc: string) => {
       );
       if (ratingAspect && ratingAspect.values) {
         rating = ratingAspect.values[0];
-      }
-
-      // Extract release year
-      const yearAspect = aspects.find((a: any) => 
-        a.name?.toLowerCase().includes('year') || 
-        a.name?.toLowerCase().includes('release')
-      );
-      if (yearAspect && yearAspect.values) {
-        const yearValue = parseInt(yearAspect.values[0]);
-        if (!isNaN(yearValue)) {
-          releaseYear = yearValue;
-        }
       }
 
       // Extract runtime
@@ -157,79 +170,67 @@ const lookupDVDByUPC = async (upc: string) => {
 
 // Check for existing DVDs by UPC
 const checkDuplicateDVD = async (upc: string) => {
-  const existingItems = await prisma.item.findMany({
-    where: {
-      isbnMaster: {
-        isbn: upc
-      }
-    },
-    select: {
-      id: true,
-      currentStatus: true,
-      intakeDate: true,
-      currentLocation: true
-    },
-    orderBy: {
-      intakeDate: 'desc'
-    }
+  const existingDVD = await prisma.dVD.findFirst({
+    where: { upc: upc }
   });
-
-  if (existingItems.length > 0) {
-    return {
-      isDuplicate: true,
-      message: `Warning: ${existingItems.length} DVD(s) with this UPC already exist in inventory.`,
-      existingItems: existingItems.map(item => ({
-        id: item.id,
-        status: item.currentStatus,
-        intakeDate: item.intakeDate.toLocaleDateString(),
-        location: item.currentLocation
-      }))
-    };
-  }
-
-  return { isDuplicate: false };
+  return existingDVD;
 };
 
-// GET /api/dvd/:upc - Lookup DVD by UPC
-router.get('/:upc', async (req, res) => {
-  console.log('DVD route hit with UPC:', req.params.upc);
+// POST /api/dvd/lookup - Lookup DVD by UPC using Auth'n'Auth
+router.post('/lookup', async (req, res) => {
   try {
-    const { upc } = req.params;
-    
-    if (!upc || upc.length < 8) {
-      return res.status(400).json({
-        success: false,
-        error: 'Valid UPC required (minimum 8 digits)'
+    const { upc } = req.body;
+
+    if (!upc) {
+      return res.status(400).json({ error: 'UPC is required' });
+    }
+
+    // Check for duplicates first
+    const existingDVD = await checkDuplicateDVD(upc);
+    if (existingDVD) {
+      return res.status(409).json({ 
+        error: 'DVD already exists', 
+        dvd: existingDVD 
       });
     }
 
-    console.log(`DVD lookup request for UPC: ${upc}`);
-
-    // Look up DVD data from eBay
-    const dvdData = await lookupDVDByUPC(upc);
-
-    // Check for duplicates
-    const duplicateCheck = await checkDuplicateDVD(upc);
+    // Lookup DVD data from eBay
+    const dvdData = await lookupDVDByUPCWithAuthnAuth(upc);
 
     res.json({
       success: true,
-      data: dvdData,
-      duplicate: duplicateCheck.isDuplicate ? duplicateCheck : null
+      data: dvdData
     });
 
   } catch (error) {
     console.error('DVD lookup error:', error);
-    
-    if (error instanceof Error && error.message.includes('not found')) {
-      return res.status(404).json({
-        success: false,
-        error: 'DVD not found. Please verify the UPC or use manual entry.'
-      });
-    }
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to lookup DVD' 
+    });
+  }
+});
 
-    res.status(500).json({
-      success: false,
-      error: 'Failed to look up DVD. Please try again or use manual entry.'
+// GET /api/dvd/auth-url - Get Auth'n'Auth authorization URL
+router.get('/auth-url', async (req, res) => {
+  try {
+    const authnAuth = createAuthnAuthFromEnv();
+    const authUrl = authnAuth.generateAuthUrl();
+    
+    res.json({
+      success: true,
+      authUrl: authUrl,
+      instructions: [
+        '1. Open the URL above in your browser',
+        '2. Sign in to your eBay account',
+        '3. Authorize the application',
+        '4. Copy the session ID from the redirect URL',
+        '5. Use the session ID to get a user token'
+      ]
+    });
+  } catch (error) {
+    console.error('Auth URL generation error:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to generate auth URL' 
     });
   }
 });
