@@ -49,7 +49,7 @@ export default function Dashboard() {
         setIsLoading(true);
         setError(null);
         
-        const response = await apiCall('http://localhost:3001/api/items/dashboard-stats');
+        const response = await apiCall('/api/items/dashboard-stats');
         if (!response.ok) {
           throw new Error('Failed to fetch dashboard statistics');
         }
