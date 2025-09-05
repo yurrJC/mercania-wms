@@ -1220,6 +1220,14 @@ export default function InventoryPage() {
                                   src={item.isbnMaster.imageUrl} 
                                   alt="Book cover"
                                   className="h-16 w-12 object-cover rounded"
+                                  onError={(e) => {
+                                    console.log('Image failed to load:', item.isbnMaster.imageUrl);
+                                    console.log('Item data:', item);
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                  onLoad={() => {
+                                    console.log('Image loaded successfully:', item.isbnMaster.imageUrl);
+                                  }}
                                 />
                               ) : (
                                 <div className="h-16 w-12 bg-gray-200 rounded flex items-center justify-center">
@@ -1424,6 +1432,13 @@ export default function InventoryPage() {
                           src={selectedItem.isbnMaster.imageUrl} 
                           alt="Book cover"
                           className="h-32 w-24 object-cover rounded shadow-md"
+                          onError={(e) => {
+                            console.log('Detail image failed to load:', selectedItem.isbnMaster.imageUrl);
+                            e.currentTarget.style.display = 'none';
+                          }}
+                          onLoad={() => {
+                            console.log('Detail image loaded successfully:', selectedItem.isbnMaster.imageUrl);
+                          }}
                         />
                       ) : (
                         <div className="h-32 w-24 bg-gray-200 rounded shadow-md flex items-center justify-center">

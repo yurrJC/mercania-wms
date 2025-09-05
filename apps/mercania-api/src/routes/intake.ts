@@ -324,6 +324,7 @@ router.post('/', async (req, res): Promise<any> => {
           imageUrl: itemData.imageUrl,
           categories: itemData.categories
         }, null, 2));
+        console.log('Cover art URL being saved:', itemData.imageUrl);
         
         isbnMaster = await prisma.isbnMaster.upsert({
           where: { isbn: identifier },

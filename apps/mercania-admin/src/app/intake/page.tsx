@@ -1530,63 +1530,68 @@ export default function IntakePage() {
                   </h2>
                 </div>
 
-                {/* Cover Art Display */}
-                {cdData?.coverArtUrl && (
-                  <div className="mb-6 flex justify-center">
-                    <div className="relative">
-                      <img 
-                        src={cdData.coverArtUrl} 
-                        alt={`Cover of ${cdData.title}`}
-                        className="w-32 h-32 object-cover rounded-lg shadow-md border border-gray-200"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
+                <form onSubmit={handleCDSubmit} className="space-y-3">
+                  {/* Cover Art and Form Header */}
+                  <div className="flex items-start space-x-4 mb-4">
+                    {/* Cover Art */}
+                    {cdData?.coverArtUrl && (
+                      <div className="flex-shrink-0">
+                        <img 
+                          src={cdData.coverArtUrl} 
+                          alt={`Cover of ${cdData.title}`}
+                          className="w-20 h-20 object-cover rounded-lg shadow-md border border-gray-200"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Essential Fields - First Row */}
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
+                        <input
+                          type="text"
+                          value={cdFormData.barcode}
+                          onChange={(e) => setCdFormData(prev => ({ ...prev, barcode: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                          readOnly={!cdManualEntry}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                        <input
+                          type="text"
+                          value={cdFormData.title}
+                          onChange={(e) => setCdFormData(prev => ({ ...prev, title: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Artist</label>
+                        <input
+                          type="text"
+                          value={cdFormData.artist}
+                          onChange={(e) => setCdFormData(prev => ({ ...prev, artist: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                        />
+                      </div>
                     </div>
                   </div>
-                )}
 
-                <form onSubmit={handleCDSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
-                      <input
-                        type="text"
-                        value={cdFormData.barcode}
-                        onChange={(e) => setCdFormData(prev => ({ ...prev, barcode: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        readOnly={!cdManualEntry}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                      <input
-                        type="text"
-                        value={cdFormData.title}
-                        onChange={(e) => setCdFormData(prev => ({ ...prev, title: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Artist</label>
-                      <input
-                        type="text"
-                        value={cdFormData.artist}
-                        onChange={(e) => setCdFormData(prev => ({ ...prev, artist: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
-                    </div>
-                    
+                  {/* Main Form Fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
                       <input
                         type="text"
                         value={cdFormData.label}
                         onChange={(e) => setCdFormData(prev => ({ ...prev, label: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                       />
                     </div>
                     
@@ -1596,7 +1601,7 @@ export default function IntakePage() {
                         type="number"
                         value={cdFormData.releaseYear || ''}
                         onChange={(e) => setCdFormData(prev => ({ ...prev, releaseYear: e.target.value ? parseInt(e.target.value) : null }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                         min="1900"
                         max={new Date().getFullYear()}
                       />
@@ -1607,7 +1612,7 @@ export default function IntakePage() {
                       <select
                         value={cdFormData.format}
                         onChange={(e) => setCdFormData(prev => ({ ...prev, format: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                       >
                         <option value="CD">CD</option>
                         <option value="CD Single">CD Single</option>
@@ -1622,19 +1627,18 @@ export default function IntakePage() {
                         type="text"
                         value={cdFormData.genre}
                         onChange={(e) => setCdFormData(prev => ({ ...prev, genre: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                         placeholder="e.g., Rock, Pop, Classical"
                       />
                     </div>
                     
-                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Runtime (minutes)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Runtime (min)</label>
                       <input
                         type="number"
                         value={cdFormData.runtime || ''}
                         onChange={(e) => setCdFormData(prev => ({ ...prev, runtime: e.target.value ? parseInt(e.target.value) : null }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                         min="1"
                         max="999"
                       />
@@ -1645,7 +1649,7 @@ export default function IntakePage() {
                       <select
                         value={cdFormData.conditionGrade}
                         onChange={(e) => setCdFormData(prev => ({ ...prev, conditionGrade: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                         required
                       >
                         <option value="MINT">Mint</option>
@@ -1665,7 +1669,7 @@ export default function IntakePage() {
                           type="number"
                           value={cdFormData.costCents}
                           onChange={(e) => setCdFormData(prev => ({ ...prev, costCents: parseFloat(e.target.value) || 0 }))}
-                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                           min="0"
                           step="0.01"
                           placeholder="0.00"
@@ -1674,43 +1678,47 @@ export default function IntakePage() {
                     </div>
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Condition Notes</label>
-                    <textarea
-                      value={cdFormData.conditionNotes}
-                      onChange={(e) => setCdFormData(prev => ({ ...prev, conditionNotes: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      rows={3}
-                      placeholder="Any scratches, missing booklet, etc."
-                    />
-                  </div>
-
-                  {duplicateWarning && duplicateWarning.isDuplicate && (
-                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-center mb-2">
-                        <AlertCircle className="h-5 w-5 text-yellow-600 mr-2" />
-                        <span className="font-medium text-yellow-800">Duplicate Found</span>
-                      </div>
-                      <p className="text-yellow-700 text-sm mb-3">{duplicateWarning.message}</p>
-                      {duplicateWarning.existingItems && (
-                        <div className="text-sm text-yellow-700">
-                          <p className="font-medium mb-1">Existing items:</p>
-                          <ul className="space-y-1">
-                            {duplicateWarning.existingItems.map((item) => (
-                              <li key={item.id}>
-                                ID {item.id} - {item.status} - {item.intakeDate} - {item.location || 'No location'}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                  {/* Condition Notes and Duplicate Warning */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Condition Notes</label>
+                      <textarea
+                        value={cdFormData.conditionNotes}
+                        onChange={(e) => setCdFormData(prev => ({ ...prev, conditionNotes: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                        rows={2}
+                        placeholder="Any scratches, missing booklet, etc."
+                      />
                     </div>
-                  )}
+                    
+                    {/* Duplicate Warning */}
+                    {duplicateWarning && duplicateWarning.isDuplicate && (
+                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex items-center mb-2">
+                          <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
+                          <span className="font-medium text-yellow-800 text-sm">Duplicate Found</span>
+                        </div>
+                        <p className="text-yellow-700 text-xs mb-2">{duplicateWarning.message}</p>
+                        {duplicateWarning.existingItems && (
+                          <div className="text-xs text-yellow-700">
+                            <p className="font-medium mb-1">Existing items:</p>
+                            <ul className="space-y-1">
+                              {duplicateWarning.existingItems.map((item) => (
+                                <li key={item.id}>
+                                  ID {item.id} - {item.status} - {item.intakeDate} - {item.location || 'No location'}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   
                   <button
                     type="submit"
                     disabled={isLoading || !cdFormData.title.trim()}
-                    className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                    className="w-full bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-sm"
                   >
                     {isLoading ? 'Adding CD...' : 'Add CD to Inventory'}
                   </button>

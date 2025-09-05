@@ -108,9 +108,13 @@ const lookupCDByBarcode = async (barcode: string) => {
     let coverArtUrl = null;
     if (release.id) {
       coverArtUrl = `https://coverartarchive.org/release/${release.id}/front-250`;
+      console.log(`Cover art URL generated: ${coverArtUrl}`);
+    } else {
+      console.log('No release ID found, cannot generate cover art URL');
     }
 
     console.log(`Successfully retrieved CD data: ${artist} - ${title}`);
+    console.log(`Cover art URL: ${coverArtUrl}`);
 
     return {
       barcode: barcode,
