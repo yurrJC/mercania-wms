@@ -375,9 +375,10 @@ router.post('/', async (req, res): Promise<any> => {
       // This ensures the inventory screen can display the title and author properly
       try {
         // Add randomness to prevent duplicates even in edge cases
-        let timestamp = Date.now();
-        let randomSuffix = Math.random().toString(36).substr(2, 4);
-        let manualIdentifier = `M${productType.charAt(0)}${timestamp}${randomSuffix}`; // e.g., "MC1703123456789a7b2"
+        // Keep under 13 characters to fit database constraint
+        let timestamp = Date.now().toString().slice(-8); // Last 8 digits of timestamp
+        let randomSuffix = Math.random().toString(36).substr(2, 3); // 3 random chars
+        let manualIdentifier = `M${productType.charAt(0)}${timestamp}${randomSuffix}`; // e.g., "MC12345678a7b" (13 chars)
         console.log('Creating manual master record with identifier:', manualIdentifier);
         
         // Try to create the master record, with retry logic for duplicates
@@ -405,8 +406,8 @@ router.post('/', async (req, res): Promise<any> => {
             if (duplicateError.code === 'P2002' && attempts < maxAttempts - 1) {
               // Duplicate key error, generate new identifier and retry
               attempts++;
-              timestamp = Date.now();
-              randomSuffix = Math.random().toString(36).substr(2, 4);
+              timestamp = Date.now().toString().slice(-8); // Last 8 digits of timestamp
+              randomSuffix = Math.random().toString(36).substr(2, 3); // 3 random chars
               manualIdentifier = `M${productType.charAt(0)}${timestamp}${randomSuffix}`;
               console.log(`Duplicate detected, retrying with new identifier: ${manualIdentifier}`);
             } else {
