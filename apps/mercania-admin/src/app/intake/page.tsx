@@ -126,7 +126,6 @@ export default function IntakePage() {
   // DVD-specific states
   const [upcInput, setUpcInput] = useState('');
   const [dvdData, setDvdData] = useState<DVDData | null>(null);
-  const [dvdManualEntry, setDvdManualEntry] = useState(false);
   const [dvdFormData, setDvdFormData] = useState<DVDFormData>({
     upc: '',
     title: '',
@@ -252,71 +251,44 @@ export default function IntakePage() {
   };
 
   // DVD functions
-  const fetchDVDData = async (upc: string): Promise<void> => {
-    setIsLoading(true);
-    setError('');
-    setDvdData(null);
-    setDuplicateWarning(null);
-    
-    try {
-      const response = await apiCall(`/api/intake/dvd/${upc}`);
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('DVD not found. Please verify the UPC or use manual entry.');
-        }
-        throw new Error('Failed to fetch DVD data');
-      }
-      
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch DVD data');
-      }
-      
-      const data = result.data;
-      setDvdData({
-        upc: data.upc,
-        title: data.title,
-        director: data.director,
-        studio: data.studio,
-        releaseYear: data.releaseYear,
-        format: data.format,
-        region: data.region || '4',
-        season: data.season || '',
-        videoFormat: data.videoFormat || 'PAL',
-        genre: data.genre,
-        rating: data.rating,
-        runtime: data.runtime
-      });
-      setDvdFormData({
-        upc: data.upc,
-        title: data.title,
-        director: data.director,
-        studio: data.studio,
-        releaseYear: data.releaseYear,
-        format: data.format,
-        region: data.region || '4',
-        season: data.season || '',
-        videoFormat: data.videoFormat || 'PAL',
-        genre: data.genre,
-        rating: data.rating,
-        runtime: data.runtime,
+  const handleDVDBarcodeScan = (upc: string): void => {
+    // Just populate the UPC field and show the form - no API call needed
+    setDvdFormData(prev => ({
+      ...prev,
+      upc: upc,
+      title: '',
+      director: '',
+      studio: '',
+      releaseYear: null,
+      format: 'DVD',
+      region: '4',
+      season: '',
+      videoFormat: 'PAL',
+      genre: '',
+      rating: '',
+      runtime: null,
         conditionGrade: 'GOOD',
         conditionNotes: '',
         costCents: 0
-      });
-      
-      if (result.duplicate) {
-        setDuplicateWarning(result.duplicate);
-      }
-      
-    } catch (err) {
-      console.error('Error fetching DVD data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch DVD data');
-    } finally {
-      setIsLoading(false);
-    }
+    }));
+    
+    // Show the form by setting dvdData to trigger the form display
+    setDvdData({
+      upc: upc,
+      title: '',
+      director: '',
+      studio: '',
+      releaseYear: null,
+      format: 'DVD',
+      region: '4',
+      season: '',
+      videoFormat: 'PAL',
+      genre: '',
+      rating: '',
+      runtime: null
+    });
+    
+    setError('');
   };
 
   const handleBookSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -505,7 +477,6 @@ export default function IntakePage() {
     setDvdData(null);
     setCdData(null);
     setManualEntry(false);
-    setDvdManualEntry(false);
     setCdManualEntry(false);
     setFormData({
       isbn: '',
@@ -579,7 +550,7 @@ export default function IntakePage() {
     if (e.key === 'Enter') {
       e.preventDefault();
       if (upcInput.length >= 8) {
-        fetchDVDData(upcInput);
+        handleDVDBarcodeScan(upcInput);
       }
     }
   };
@@ -707,37 +678,6 @@ export default function IntakePage() {
     setError('');
   };
 
-  const handleDVDManualEntry = () => {
-    setDvdManualEntry(true);
-    setUpcInput('');
-    setDvdData({
-      upc: '',
-      title: '',
-      director: '',
-      studio: '',
-      releaseYear: null,
-      format: 'DVD',
-      region: '4',
-      season: '',
-      videoFormat: 'PAL',
-      genre: '',
-      rating: '',
-      runtime: null
-    });
-    setDvdFormData(prev => ({
-      ...prev,
-      upc: '',
-      title: '',
-      director: '',
-      studio: '',
-      releaseYear: null,
-      format: 'DVD',
-      region: '4',
-      season: '',
-      videoFormat: 'PAL'
-    }));
-    setError('');
-  };
 
   const handleCDSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -1255,7 +1195,7 @@ export default function IntakePage() {
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
               <div className="flex items-center mb-4">
                 <Scan className="h-6 w-6 text-purple-600 mr-3" />
-                <h2 className="text-xl font-semibold text-gray-900">Scan Barcode / Enter UPC</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Scan UPC or Enter Manually</h2>
               </div>
               
               <div className="flex space-x-4">
@@ -1272,29 +1212,24 @@ export default function IntakePage() {
                     onKeyPress={handleUpcKeyPress}
                     placeholder="Scan barcode or type UPC..."
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg font-mono"
-                    disabled={isLoading || dvdManualEntry}
+                    disabled={isLoading}
                   />
                   <p className="text-sm text-gray-500 mt-1">
-                    📷 Position barcode scanner here, or type manually
+                    📷 Scan UPC barcode or type manually, then fill out the form below
                   </p>
-                  {dvdManualEntry && (
-                    <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded text-sm text-orange-700">
-                      <strong>Manual Entry Mode:</strong> Enter DVD details manually below
-                    </div>
-                  )}
                   </div>
                 
                 <div className="flex flex-col space-y-2">
                   <button
-                    onClick={() => fetchDVDData(upcInput)}
-                    disabled={isLoading || upcInput.length < 8 || dvdManualEntry}
+                    onClick={() => handleDVDBarcodeScan(upcInput)}
+                    disabled={upcInput.length < 8}
                     className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
                   >
-                    {isLoading ? 'Looking up...' : 'Lookup'}
+                    Apply UPC
                   </button>
                   
                   <button
-                    onClick={handleDVDManualEntry}
+                    onClick={() => handleDVDBarcodeScan('')}
                     className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium text-sm"
                   >
                     No Barcode?
@@ -1315,13 +1250,8 @@ export default function IntakePage() {
                 <div className="flex items-center mb-4">
                   <Edit3 className="h-6 w-6 text-purple-600 mr-3" />
                   <h2 className="text-xl font-semibold text-gray-900">
-                    {dvdManualEntry ? 'DVD Information (Manual Entry)' : 'DVD Information (Editable)'}
+                    DVD Information
                   </h2>
-                  {dvdManualEntry && (
-                    <div className="ml-3 bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-medium">
-                      Manual Entry
-              </div>
-                  )}
             </div>
 
                 <form onSubmit={handleDVDSubmit} className="space-y-4">
@@ -1333,7 +1263,7 @@ export default function IntakePage() {
                         value={dvdFormData.upc}
                         onChange={(e) => setDvdFormData(prev => ({ ...prev, upc: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        readOnly={!dvdManualEntry}
+                        placeholder="Enter UPC or leave blank for manual entry"
                       />
           </div>
                     

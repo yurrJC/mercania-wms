@@ -209,7 +209,7 @@ router.post('/', async (req, res): Promise<any> => {
     
     // Handle different scenarios based on product type and identifier
     if (!identifier || identifier.trim() === '') {
-      // Allow manual entries for books and CDs, require barcode for DVDs
+      // Allow manual entries for books, CDs, and DVDs
       if (productType === 'BOOK') {
         // For manual books, require at least a title
         if (!validatedData.title || !validatedData.title.trim()) {
@@ -232,6 +232,17 @@ router.post('/', async (req, res): Promise<any> => {
         
         identifier = null; // No barcode for manual CDs - will be tracked by internal ID only
         console.log('Creating manual CD entry (no barcode)');
+      } else if (productType === 'DVD') {
+        // For manual DVDs, require at least a title
+        if (!validatedData.title || !validatedData.title.trim()) {
+          return res.status(400).json({
+            success: false,
+            error: 'For manual DVD entries, title is required'
+          });
+        }
+        
+        identifier = null; // No UPC for manual DVDs - will be tracked by internal ID only
+        console.log('Creating manual DVD entry (no UPC)');
       } else {
         return res.status(400).json({
           success: false,

@@ -142,6 +142,9 @@ const lookupDVDByUPC = async (upc: string) => {
       studio: studio,
       releaseYear: releaseYear,
       format: format,
+      region: '4', // Default to Region 4 (Australia)
+      season: '', // Empty by default
+      videoFormat: 'PAL', // Default to PAL (Australia)
       genre: genre,
       rating: rating,
       runtime: runtime,
