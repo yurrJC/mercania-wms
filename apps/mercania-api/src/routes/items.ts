@@ -162,6 +162,7 @@ router.get('/export', async (req, res) => {
         currentLocation: true,
         lotNumber: true,
         dvdMetadata: true,
+        createdAt: true,
         isbnMaster: {
           select: { title: true, author: true, publisher: true, binding: true, imageUrl: true, pubYear: true }
         }
@@ -169,7 +170,7 @@ router.get('/export', async (req, res) => {
     });
 
     const header = ['ID','SKU','Status','Location','Lot','Listed Date','Sold Date','ISBN','Title','Author','Publisher','Binding','Created'];
-    const rows = items.map(it => [
+    const rows = items.map((it: any) => [
       it.id,
       `${it.currentLocation || 'TBD'}-${it.id}`,
       it.currentStatus || '',
@@ -980,6 +981,7 @@ router.get('/', async (req, res) => {
           currentLocation: true,
           lotNumber: true,
           dvdMetadata: true,
+          createdAt: true,
           isbnMaster: {
             select: {
               title: true,
