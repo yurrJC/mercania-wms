@@ -374,22 +374,50 @@ router.post('/', async (req, res): Promise<any> => {
       // For manual entries without barcode, create a master record with a generated identifier
       // This ensures the inventory screen can display the title and author properly
       try {
-        const manualIdentifier = `M${productType.charAt(0)}${Date.now()}`; // e.g., "MC1703123456789"
+        // Add randomness to prevent duplicates even in edge cases
+        let timestamp = Date.now();
+        let randomSuffix = Math.random().toString(36).substr(2, 4);
+        let manualIdentifier = `M${productType.charAt(0)}${timestamp}${randomSuffix}`; // e.g., "MC1703123456789a7b2"
         console.log('Creating manual master record with identifier:', manualIdentifier);
         
-        isbnMaster = await prisma.isbnMaster.create({
-          data: {
-            isbn: manualIdentifier,
-            title: itemData.title,
-            author: itemData.author,
-            publisher: itemData.publisher,
-            pubYear: itemData.pubYear,
-            binding: itemData.binding,
-            imageUrl: itemData.imageUrl,
-            categories: itemData.categories
+        // Try to create the master record, with retry logic for duplicates
+        let attempts = 0;
+        const maxAttempts = 3;
+        let created = false;
+        
+        while (!created && attempts < maxAttempts) {
+          try {
+            isbnMaster = await prisma.isbnMaster.create({
+              data: {
+                isbn: manualIdentifier,
+                title: itemData.title,
+                author: itemData.author,
+                publisher: itemData.publisher,
+                pubYear: itemData.pubYear,
+                binding: itemData.binding,
+                imageUrl: itemData.imageUrl,
+                categories: itemData.categories
+              }
+            });
+            console.log('Manual master record created successfully');
+            created = true;
+          } catch (duplicateError: any) {
+            if (duplicateError.code === 'P2002' && attempts < maxAttempts - 1) {
+              // Duplicate key error, generate new identifier and retry
+              attempts++;
+              timestamp = Date.now();
+              randomSuffix = Math.random().toString(36).substr(2, 4);
+              manualIdentifier = `M${productType.charAt(0)}${timestamp}${randomSuffix}`;
+              console.log(`Duplicate detected, retrying with new identifier: ${manualIdentifier}`);
+            } else {
+              throw duplicateError;
+            }
           }
-        });
-        console.log('Manual master record created successfully');
+        }
+        
+        if (!created) {
+          throw new Error('Failed to create unique manual identifier after multiple attempts');
+        }
         
         // Update identifier to use the generated one
         identifier = manualIdentifier;
