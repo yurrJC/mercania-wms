@@ -206,7 +206,7 @@ router.post('/', async (req, res): Promise<any> => {
     
     // Handle different scenarios based on product type and identifier
     if (!identifier || identifier.trim() === '') {
-      // Allow manual entries for books only, require barcode for DVDs/CDs
+      // Allow manual entries for books and CDs, require barcode for DVDs
       if (productType === 'BOOK') {
         // For manual books, require at least a title
         if (!validatedData.title || !validatedData.title.trim()) {
@@ -218,10 +218,21 @@ router.post('/', async (req, res): Promise<any> => {
         
         identifier = null; // No ISBN for manual books - will be tracked by internal ID only
         console.log('Creating manual book entry (no ISBN)');
+      } else if (productType === 'CD') {
+        // For manual CDs, require at least a title
+        if (!validatedData.title || !validatedData.title.trim()) {
+          return res.status(400).json({
+            success: false,
+            error: 'For manual CD entries, title is required'
+          });
+        }
+        
+        identifier = null; // No barcode for manual CDs - will be tracked by internal ID only
+        console.log('Creating manual CD entry (no barcode)');
       } else {
         return res.status(400).json({
           success: false,
-          error: `${productType === 'DVD' ? 'UPC' : 'Barcode'} is required for ${productType.toLowerCase()} entries`
+          error: `UPC is required for ${productType.toLowerCase()} entries`
         });
       }
     } else {
@@ -255,12 +266,6 @@ router.post('/', async (req, res): Promise<any> => {
         imageUrl: validatedData.imageUrl || null, // Use the cover art URL from frontend
         categories: validatedData.cdMetadata?.genre ? [validatedData.cdMetadata.genre] : []
       };
-      
-      // For manual CD entries without barcode, set identifier to null
-      if (!identifier || identifier.trim() === '') {
-        identifier = null;
-        console.log('Creating manual CD entry (no barcode)');
-      }
     } else {
       // For books
       if (identifier && identifier.startsWith('MB')) {
