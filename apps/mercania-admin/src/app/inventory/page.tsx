@@ -87,8 +87,11 @@ export default function InventoryPage() {
   const formatItemTitle = (item: Item): string => {
     const baseTitle = item.isbnMaster?.title || 'Unknown Title';
     
-    // For DVDs, add season info in brackets if available
-    if (item.isbnMaster?.binding === 'DVD' && item.dvdMetadata?.season) {
+    // For DVDs/Blu-ray/4K, add season info in brackets if available
+    const isVideoFormat = item.isbnMaster?.binding && 
+      ['DVD', 'Blu-ray', '4K'].includes(item.isbnMaster.binding);
+    
+    if (isVideoFormat && item.dvdMetadata?.season) {
       return `${baseTitle} (${item.dvdMetadata.season})`;
     }
     
@@ -97,8 +100,11 @@ export default function InventoryPage() {
 
   // Helper function to format author/creator info
   const formatItemAuthor = (item: Item): string => {
-    // For DVDs, show format and region instead of director
-    if (item.isbnMaster?.binding === 'DVD' && item.dvdMetadata) {
+    // For DVDs/Blu-ray/4K, show format and region instead of director
+    const isVideoFormat = item.isbnMaster?.binding && 
+      ['DVD', 'Blu-ray', '4K'].includes(item.isbnMaster.binding);
+    
+    if (isVideoFormat && item.dvdMetadata) {
       const format = item.isbnMaster.binding || 'DVD';
       const region = item.dvdMetadata.region || 'Unknown';
       return `${format}, Region ${region}`;
@@ -724,9 +730,9 @@ export default function InventoryPage() {
       // Open PDF in new window for printing
       const printWindow = window.open(url, '_blank');
       
-      if (printWindow) {
+    if (printWindow) {
         printWindow.onload = () => {
-          printWindow.print();
+        printWindow.print();
         };
       } else {
         // Fallback: download the PDF
@@ -1271,7 +1277,7 @@ export default function InventoryPage() {
                                   ) : item.isbnMaster?.binding === 'DVD' ? (
                                     <Play className="h-6 w-6 text-gray-400" />
                                   ) : (
-                                    <BookOpen className="h-6 w-6 text-gray-400" />
+                                  <BookOpen className="h-6 w-6 text-gray-400" />
                                   )}
                                 </div>
                               )}
@@ -1488,7 +1494,7 @@ export default function InventoryPage() {
                           ) : selectedItem.isbnMaster?.binding === 'DVD' ? (
                             <Play className="h-8 w-8 text-gray-400" />
                           ) : (
-                            <BookOpen className="h-8 w-8 text-gray-400" />
+                          <BookOpen className="h-8 w-8 text-gray-400" />
                           )}
                         </div>
                       )}
@@ -1498,12 +1504,12 @@ export default function InventoryPage() {
                         </h3>
                         <p className="text-gray-600 mb-1">
                           <span className="font-medium">
-                            {selectedItem.isbnMaster?.binding === 'DVD' ? 'Format & Region:' : 'Author:'}
+                            {['DVD', 'Blu-ray', '4K'].includes(selectedItem.isbnMaster?.binding || '') ? 'Format & Region:' : 'Author:'}
                           </span> {formatItemAuthor(selectedItem)}
                         </p>
                         <p className="text-gray-600 mb-1">
                           <span className="font-medium">
-                            {selectedItem.isbnMaster?.binding === 'DVD' ? 'Studio:' : 'Publisher:'}
+                            {['DVD', 'Blu-ray', '4K'].includes(selectedItem.isbnMaster?.binding || '') ? 'Studio:' : 'Publisher:'}
                           </span> {selectedItem.isbnMaster?.publisher || 'Unknown'}
                         </p>
                         <p className="text-gray-600">
@@ -1574,7 +1580,7 @@ export default function InventoryPage() {
                   </div>
 
                   {/* DVD-specific metadata */}
-                  {selectedItem.isbnMaster?.binding === 'DVD' && selectedItem.dvdMetadata && (
+                  {['DVD', 'Blu-ray', '4K'].includes(selectedItem.isbnMaster?.binding || '') && selectedItem.dvdMetadata && (
                     <div className="mt-6 border-t pt-6">
                       <h4 className="text-lg font-medium text-gray-900 mb-4">DVD Details</h4>
                       <div className="grid grid-cols-2 gap-4">
@@ -1845,7 +1851,7 @@ export default function InventoryPage() {
                                   ) : item.isbnMaster?.binding === 'DVD' ? (
                                     <Play className="h-6 w-6 text-gray-400" />
                                   ) : (
-                                    <BookOpen className="h-6 w-6 text-gray-400" />
+                                  <BookOpen className="h-6 w-6 text-gray-400" />
                                   )}
                                 </div>
                               )}
@@ -1941,7 +1947,7 @@ export default function InventoryPage() {
                                 ) : item.isbnMaster?.binding === 'DVD' ? (
                                   <Play className="h-6 w-6 text-gray-400" />
                                 ) : (
-                                  <BookOpen className="h-6 w-6 text-gray-400" />
+                                <BookOpen className="h-6 w-6 text-gray-400" />
                                 )}
                               </div>
                             )}
