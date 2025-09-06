@@ -1690,29 +1690,6 @@ export default function IntakePage() {
                         placeholder="Any scratches, missing booklet, etc."
                       />
                     </div>
-                    
-                    {/* Duplicate Warning */}
-                    {duplicateWarning && duplicateWarning.isDuplicate && (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <div className="flex items-center mb-2">
-                          <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
-                          <span className="font-medium text-yellow-800 text-sm">Duplicate Found</span>
-                        </div>
-                        <p className="text-yellow-700 text-xs mb-2">{duplicateWarning.message}</p>
-                        {duplicateWarning.existingItems && (
-                          <div className="text-xs text-yellow-700">
-                            <p className="font-medium mb-1">Existing items:</p>
-                            <ul className="space-y-1">
-                              {duplicateWarning.existingItems.map((item) => (
-                                <li key={item.id}>
-                                  ID {item.id} - {item.status} - {item.intakeDate} - {item.location || 'No location'}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                   
                   <button
