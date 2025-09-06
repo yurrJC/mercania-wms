@@ -1254,8 +1254,8 @@ export default function IntakePage() {
                   </h2>
             </div>
 
-                <form onSubmit={handleDVDSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleDVDSubmit} className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">UPC/EAN</label>
                       <input
@@ -1405,7 +1405,7 @@ export default function IntakePage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Runtime (minutes)</label>
                       <input

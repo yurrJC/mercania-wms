@@ -38,6 +38,14 @@ interface Item {
   currentStatus: string;
   currentLocation: string | null;
   lotNumber: number | null;
+  dvdMetadata?: {
+    genre?: string | null;
+    rating?: string | null;
+    runtime?: number | null;
+    region?: string | null;
+    season?: string | null;
+    videoFormat?: string | null;
+  } | null;
   isbnMaster: {
     title: string;
     author: string;
@@ -74,6 +82,31 @@ export default function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Item | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Helper function to format DVD title with season info
+  const formatItemTitle = (item: Item): string => {
+    const baseTitle = item.isbnMaster?.title || 'Unknown Title';
+    
+    // For DVDs, add season info in brackets if available
+    if (item.isbnMaster?.binding === 'DVD' && item.dvdMetadata?.season) {
+      return `${baseTitle} (${item.dvdMetadata.season})`;
+    }
+    
+    return baseTitle;
+  };
+
+  // Helper function to format author/creator info
+  const formatItemAuthor = (item: Item): string => {
+    // For DVDs, show format and region instead of director
+    if (item.isbnMaster?.binding === 'DVD' && item.dvdMetadata) {
+      const format = item.isbnMaster.binding || 'DVD';
+      const region = item.dvdMetadata.region || 'Unknown';
+      return `${format}, Region ${region}`;
+    }
+    
+    // For other items, show author/artist
+    return item.isbnMaster?.author || 'Unknown Author';
+  };
   const [showLotModal, setShowLotModal] = useState(false);
   const [lotItems, setLotItems] = useState<Item[]>([]);
   const [lotSearchTerm, setLotSearchTerm] = useState('');
@@ -1245,10 +1278,10 @@ export default function InventoryPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">
-                                {item.isbnMaster?.title || 'Unknown Title'}
+                                {formatItemTitle(item)}
                               </p>
                               <p className="text-sm text-gray-500 truncate">
-                                {item.isbnMaster?.author || 'Unknown Author'}
+                                {formatItemAuthor(item)}
                               </p>
                               <p className="text-xs text-gray-400">
                                 ISBN: {item.isbn}
@@ -1461,13 +1494,17 @@ export default function InventoryPage() {
                       )}
                       <div className="flex-1">
                         <h3 className="text-lg font-medium text-gray-900 mb-2">
-                          {selectedItem.isbnMaster?.title || 'Unknown Title'}
+                          {formatItemTitle(selectedItem)}
                         </h3>
                         <p className="text-gray-600 mb-1">
-                          <span className="font-medium">Author:</span> {selectedItem.isbnMaster?.author || 'Unknown'}
+                          <span className="font-medium">
+                            {selectedItem.isbnMaster?.binding === 'DVD' ? 'Format & Region:' : 'Author:'}
+                          </span> {formatItemAuthor(selectedItem)}
                         </p>
                         <p className="text-gray-600 mb-1">
-                          <span className="font-medium">Publisher:</span> {selectedItem.isbnMaster?.publisher || 'Unknown'}
+                          <span className="font-medium">
+                            {selectedItem.isbnMaster?.binding === 'DVD' ? 'Studio:' : 'Publisher:'}
+                          </span> {selectedItem.isbnMaster?.publisher || 'Unknown'}
                         </p>
                         <p className="text-gray-600">
                           <span className="font-medium">Year:</span> {selectedItem.isbnMaster?.pubYear || 'Unknown'}
@@ -1535,6 +1572,45 @@ export default function InventoryPage() {
                       </p>
                     </div>
                   </div>
+
+                  {/* DVD-specific metadata */}
+                  {selectedItem.isbnMaster?.binding === 'DVD' && selectedItem.dvdMetadata && (
+                    <div className="mt-6 border-t pt-6">
+                      <h4 className="text-lg font-medium text-gray-900 mb-4">DVD Details</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        {selectedItem.dvdMetadata.season && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Season</label>
+                            <p className="text-gray-900">{selectedItem.dvdMetadata.season}</p>
+                          </div>
+                        )}
+                        {selectedItem.dvdMetadata.videoFormat && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Video Format</label>
+                            <p className="text-gray-900">{selectedItem.dvdMetadata.videoFormat}</p>
+                          </div>
+                        )}
+                        {selectedItem.dvdMetadata.genre && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Genre</label>
+                            <p className="text-gray-900">{selectedItem.dvdMetadata.genre}</p>
+                          </div>
+                        )}
+                        {selectedItem.dvdMetadata.rating && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                            <p className="text-gray-900">{selectedItem.dvdMetadata.rating}</p>
+                          </div>
+                        )}
+                        {selectedItem.dvdMetadata.runtime && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Runtime</label>
+                            <p className="text-gray-900">{selectedItem.dvdMetadata.runtime} minutes</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Status History */}
@@ -1777,10 +1853,10 @@ export default function InventoryPage() {
                             
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">
-                                {item.isbnMaster?.title || 'Unknown Title'}
+                                {formatItemTitle(item)}
                               </p>
                               <p className="text-sm text-gray-500 truncate">
-                                {item.isbnMaster?.author || 'Unknown Author'}
+                                {formatItemAuthor(item)}
                               </p>
                               <div className="flex items-center space-x-4 mt-1">
                                 <span className="text-xs font-bold text-purple-600">
@@ -1873,10 +1949,10 @@ export default function InventoryPage() {
                           
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">
-                              {item.isbnMaster?.title || 'Unknown Title'}
+                              {formatItemTitle(item)}
                             </p>
                             <p className="text-sm text-gray-500 truncate">
-                              {item.isbnMaster?.author || 'Unknown Author'}
+                              {formatItemAuthor(item)}
                             </p>
                             <div className="flex items-center space-x-4 mt-1">
                               <span className="text-xs font-bold text-purple-600">

@@ -462,8 +462,9 @@ router.post('/', async (req, res): Promise<any> => {
           conditionGrade: validatedData.conditionGrade,
           conditionNotes: validatedData.conditionNotes,
           costCents: validatedData.costCents,
-          currentStatus: 'INTAKE'
-        },
+          currentStatus: 'INTAKE',
+          dvdMetadata: productType === 'DVD' ? validatedData.dvdMetadata : null
+        } as any,
         include: {
           isbnMaster: true
         }

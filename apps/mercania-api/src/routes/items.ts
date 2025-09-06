@@ -149,9 +149,23 @@ router.get('/export', async (req, res) => {
     const items = await prisma.item.findMany({
       where,
       orderBy,
-      include: {
-        isbnMaster: { select: { title: true, author: true, publisher: true, binding: true } }
-      }
+      select: {
+        id: true,
+        isbn: true,
+        conditionGrade: true,
+        conditionNotes: true,
+        costCents: true,
+        intakeDate: true,
+        listedDate: true,
+        soldDate: true,
+        currentStatus: true,
+        currentLocation: true,
+        lotNumber: true,
+        dvdMetadata: true,
+        isbnMaster: {
+          select: { title: true, author: true, publisher: true, binding: true, imageUrl: true, pubYear: true }
+        }
+      } as any
     });
 
     const header = ['ID','SKU','Status','Location','Lot','Listed Date','Sold Date','ISBN','Title','Author','Publisher','Binding','Created'];
@@ -965,6 +979,7 @@ router.get('/', async (req, res) => {
           currentStatus: true,
           currentLocation: true,
           lotNumber: true,
+          dvdMetadata: true,
           isbnMaster: {
             select: {
               title: true,
@@ -975,7 +990,7 @@ router.get('/', async (req, res) => {
               imageUrl: true
             }
           }
-        },
+        } as any,
         orderBy: (() => {
           // Dynamic sorting based on search type and sort parameter
           const sortParam = String(sort || '');
