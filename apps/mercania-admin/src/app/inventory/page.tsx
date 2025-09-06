@@ -106,7 +106,13 @@ export default function InventoryPage() {
     
     if (isVideoFormat && item.dvdMetadata) {
       const format = item.isbnMaster.binding || 'DVD';
-      const region = item.dvdMetadata.region || 'Unknown';
+      let region = item.dvdMetadata.region || 'Unknown';
+      
+      // Clean up region display - remove "Region " prefix if present
+      if (region.startsWith('Region ')) {
+        region = region.replace('Region ', '');
+      }
+      
       return `${format}, Region ${region}`;
     }
     
