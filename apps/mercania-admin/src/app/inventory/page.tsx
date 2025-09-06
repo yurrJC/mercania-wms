@@ -976,7 +976,7 @@ export default function InventoryPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="space-y-4">
             {/* Search Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             
               {/* Title Search */}
               <div className="flex-1">
@@ -1043,24 +1043,24 @@ export default function InventoryPage() {
                   Type and click outside to search
                 </p>
               </div>
-            </div>
 
-            {/* Search Button Row */}
-            <div className="flex justify-center">
-              <button
-                onClick={handleSearch}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center"
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Search All
-              </button>
+              {/* Search All Button */}
+              <div className="flex items-end">
+                <button
+                  onClick={handleSearch}
+                  className="w-full bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors flex items-center justify-center"
+                >
+                  <Search className="h-4 w-4 mr-2" />
+                  Search All
+                </button>
+              </div>
             </div>
 
             {/* Second Row - Lot Search and Filters */}
-            <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
               {/* Lot Search */}
-              <div className="flex-1 max-w-md">
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Search by Lot
                 </label>
@@ -1082,7 +1082,7 @@ export default function InventoryPage() {
               </div>
 
             {/* Status Filter */}
-              <div className="flex-shrink-0">
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Status Filter
                 </label>
@@ -1091,7 +1091,7 @@ export default function InventoryPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => handleStatusFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All Statuses</option>
                 <option value="INTAKE">Intake</option>
@@ -1103,7 +1103,7 @@ export default function InventoryPage() {
               </div>
 
               {/* Sort Order */}
-              <div className="flex-shrink-0">
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Sort by ID
                 </label>
@@ -1114,7 +1114,7 @@ export default function InventoryPage() {
                   <select
                     value={sortOrder}
                     onChange={(e) => setSortOrder(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="id_desc">ID: High to Low (Default)</option>
                     <option value="id_asc">ID: Low to High</option>
