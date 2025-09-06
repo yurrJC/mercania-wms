@@ -561,7 +561,7 @@ export default function IntakePage() {
       title: '',
       author: '',
       publisher: '',
-      pubYear: new Date().getFullYear(),
+      pubYear: null,
       binding: 'Paperback'
     });
     setFormData(prev => ({
@@ -570,7 +570,7 @@ export default function IntakePage() {
       title: '',
       author: '',
       publisher: '',
-      pubYear: new Date().getFullYear(),
+      pubYear: null,
       binding: 'Paperback'
     }));
     setError('');
@@ -681,7 +681,7 @@ export default function IntakePage() {
       artist: '',
       label: '',
       catalogNumber: '',
-      releaseDate: new Date().toISOString(),
+      releaseDate: null,
       country: '',
       format: 'CD',
       genre: '',
@@ -695,7 +695,7 @@ export default function IntakePage() {
       title: '',
       artist: '',
       label: '',
-      releaseYear: new Date().getFullYear(),
+      releaseYear: null,
       format: 'CD'
     }));
     setError('');
