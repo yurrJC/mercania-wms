@@ -323,7 +323,7 @@ router.post('/', async (req, res): Promise<any> => {
     }) : [];
 
     // Create or update ISBN/UPC master record (only for items with barcodes)
-    // Manual books with no ISBN will not have a master record - they're tracked by internal ID only
+    // Manual books and CDs with no barcode will not have a master record - they're tracked by internal ID only
     let isbnMaster = null;
     if (identifier) {
       try {
@@ -373,7 +373,7 @@ router.post('/', async (req, res): Promise<any> => {
     }
 
     // Create new item (PostgreSQL auto-generates sequential ID)
-    // For manual books, isbn will be null and there's no isbnMaster relation
+    // For manual books and CDs, isbn will be null and there's no isbnMaster relation
     console.log('=== CREATING ITEM ===');
     console.log('Item data to create:', JSON.stringify(itemData, null, 2));
     console.log('Creating item with identifier:', identifier);
@@ -381,8 +381,8 @@ router.post('/', async (req, res): Promise<any> => {
     let item;
     try {
       if (identifier) {
-        // Item with ISBN - include the master relation
-        console.log('Creating item with ISBN:', identifier);
+        // Item with ISBN/barcode - include the master relation
+        console.log('Creating item with identifier:', identifier);
         item = await prisma.item.create({
           data: {
             isbn: identifier,
@@ -396,11 +396,11 @@ router.post('/', async (req, res): Promise<any> => {
           }
         });
       } else {
-        // Manual book without ISBN - no master relation
-        console.log('Creating manual book without ISBN');
+        // Manual entry without barcode - no master relation
+        console.log('Creating manual entry without identifier');
         item = await prisma.item.create({
           data: {
-            isbn: null, // Explicitly set to null for manual books
+            isbn: null, // Explicitly set to null for manual entries
             conditionGrade: validatedData.conditionGrade,
             conditionNotes: validatedData.conditionNotes,
             costCents: validatedData.costCents,
@@ -453,9 +453,9 @@ router.post('/', async (req, res): Promise<any> => {
       data: {
         item,
         internalId: item.id, // Return the simple integer ID
-        // For manual books without ISBN, include the book metadata directly
+        // For manual entries without barcode, include the metadata directly
         ...(identifier ? {} : { 
-          bookMetadata: {
+          [productType === 'BOOK' ? 'bookMetadata' : 'cdMetadata']: {
             title: itemData.title,
             author: itemData.author,
             publisher: itemData.publisher,
