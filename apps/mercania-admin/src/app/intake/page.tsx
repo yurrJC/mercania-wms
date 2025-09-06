@@ -704,6 +704,7 @@ export default function IntakePage() {
   const handleCDSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     if (!cdFormData.title.trim()) return;
+    if (!cdFormData.format.trim()) return;
     
     setIsLoading(true);
     setError('');
@@ -1500,8 +1501,8 @@ export default function IntakePage() {
                   />
                 </div>
                 
-                <div className="flex gap-2">
-              <button
+                <div className="flex flex-col space-y-2">
+                  <button
                     onClick={() => fetchCDData(barcodeInput.trim())}
                     disabled={isLoading || barcodeInput.trim().length < 8 || cdManualEntry}
                     className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
@@ -1509,8 +1510,13 @@ export default function IntakePage() {
                     {isLoading ? 'Looking up...' : 'Lookup'}
                   </button>
                   
-                  {/* CDs require barcode - no manual entry option */}
-            </div>
+                  <button
+                    onClick={handleCDManualEntry}
+                    className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium text-sm"
+                  >
+                    No Barcode?
+                  </button>
+                </div>
               </div>
 
               {error && (
@@ -1557,6 +1563,7 @@ export default function IntakePage() {
                           onChange={(e) => setCdFormData(prev => ({ ...prev, barcode: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                           readOnly={!cdManualEntry}
+                          placeholder="Optional - leave blank for manual entry"
                         />
                       </div>
                       
@@ -1608,11 +1615,12 @@ export default function IntakePage() {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Format *</label>
                       <select
                         value={cdFormData.format}
                         onChange={(e) => setCdFormData(prev => ({ ...prev, format: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                        required
                       >
                         <option value="CD">CD</option>
                         <option value="CD Single">CD Single</option>

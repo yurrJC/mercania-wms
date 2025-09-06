@@ -245,7 +245,7 @@ router.post('/', async (req, res): Promise<any> => {
       };
     } else if (productType === 'CD') {
       // For CDs, use the provided form data instead of API lookup
-      // since the lookup already happened on the frontend
+      // since the lookup already happened on the frontend (or manual entry)
       itemData = {
         title: validatedData.title || 'Unknown CD',
         author: validatedData.author || 'Unknown Artist',
@@ -255,6 +255,12 @@ router.post('/', async (req, res): Promise<any> => {
         imageUrl: validatedData.imageUrl || null, // Use the cover art URL from frontend
         categories: validatedData.cdMetadata?.genre ? [validatedData.cdMetadata.genre] : []
       };
+      
+      // For manual CD entries without barcode, set identifier to null
+      if (!identifier || identifier.trim() === '') {
+        identifier = null;
+        console.log('Creating manual CD entry (no barcode)');
+      }
     } else {
       // For books
       if (identifier && identifier.startsWith('MB')) {
