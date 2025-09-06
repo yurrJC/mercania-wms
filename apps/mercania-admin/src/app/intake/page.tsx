@@ -34,11 +34,14 @@ interface DVDData {
   title: string;
   director: string;
   studio: string;
-  releaseYear: number;
-  format: string;
+  releaseYear: number | null;
+  format: string; // DVD, Blu-ray, 4K
+  region: string; // 0, 1, 2, 3, 4, 5, 6, Region A, Region B, Region C, All Region
+  season: string;
+  videoFormat: string; // PAL, NTSC
   genre: string;
   rating: string;
-  runtime: number;
+  runtime: number | null;
 }
 
 interface CDData {
@@ -75,7 +78,10 @@ interface DVDFormData {
   director: string;
   studio: string;
   releaseYear: number | null;
-  format: string;
+  format: string; // DVD, Blu-ray, 4K
+  region: string; // 0, 1, 2, 3, 4, 5, 6, Region A, Region B, Region C, All Region
+  season: string;
+  videoFormat: string; // PAL, NTSC
   genre: string;
   rating: string;
   runtime: number | null;
@@ -128,6 +134,9 @@ export default function IntakePage() {
     studio: '',
     releaseYear: null,
     format: 'DVD',
+    region: '4',
+    season: '',
+    videoFormat: 'PAL',
     genre: '',
     rating: '',
     runtime: null,
@@ -266,7 +275,20 @@ export default function IntakePage() {
       }
       
       const data = result.data;
-      setDvdData(data);
+      setDvdData({
+        upc: data.upc,
+        title: data.title,
+        director: data.director,
+        studio: data.studio,
+        releaseYear: data.releaseYear,
+        format: data.format,
+        region: data.region || '4',
+        season: data.season || '',
+        videoFormat: data.videoFormat || 'PAL',
+        genre: data.genre,
+        rating: data.rating,
+        runtime: data.runtime
+      });
       setDvdFormData({
         upc: data.upc,
         title: data.title,
@@ -274,6 +296,9 @@ export default function IntakePage() {
         studio: data.studio,
         releaseYear: data.releaseYear,
         format: data.format,
+        region: data.region || '4',
+        season: data.season || '',
+        videoFormat: data.videoFormat || 'PAL',
         genre: data.genre,
         rating: data.rating,
         runtime: data.runtime,
@@ -364,7 +389,10 @@ export default function IntakePage() {
           dvdMetadata: {
             genre: dvdFormData.genre || null,
             rating: dvdFormData.rating || null,
-            runtime: dvdFormData.runtime || null
+            runtime: dvdFormData.runtime || null,
+            region: dvdFormData.region || null,
+            season: dvdFormData.season || null,
+            videoFormat: dvdFormData.videoFormat || null
           }
         }),
       });
@@ -497,6 +525,9 @@ export default function IntakePage() {
       studio: '',
       releaseYear: null,
       format: 'DVD',
+      region: '4',
+      season: '',
+      videoFormat: 'PAL',
       genre: '',
       rating: '',
       runtime: null,
@@ -576,31 +607,6 @@ export default function IntakePage() {
     setError('');
   };
 
-  const handleDVDManualEntry = () => {
-    setDvdManualEntry(true);
-    setUpcInput('');
-    setDvdData({
-      upc: '',
-      title: '',
-      director: '',
-      studio: '',
-      releaseYear: new Date().getFullYear(),
-      format: 'DVD',
-      genre: '',
-      rating: '',
-      runtime: 0
-    });
-    setDvdFormData(prev => ({
-      ...prev,
-      upc: '',
-      title: '',
-      director: '',
-      studio: '',
-      releaseYear: new Date().getFullYear(),
-      format: 'DVD'
-    }));
-    setError('');
-  };
 
   // CD functions
   const fetchCDData = async (barcode: string): Promise<void> => {
@@ -697,6 +703,38 @@ export default function IntakePage() {
       label: '',
       releaseYear: null,
       format: 'CD'
+    }));
+    setError('');
+  };
+
+  const handleDVDManualEntry = () => {
+    setDvdManualEntry(true);
+    setUpcInput('');
+    setDvdData({
+      upc: '',
+      title: '',
+      director: '',
+      studio: '',
+      releaseYear: null,
+      format: 'DVD',
+      region: '4',
+      season: '',
+      videoFormat: 'PAL',
+      genre: '',
+      rating: '',
+      runtime: null
+    });
+    setDvdFormData(prev => ({
+      ...prev,
+      upc: '',
+      title: '',
+      director: '',
+      studio: '',
+      releaseYear: null,
+      format: 'DVD',
+      region: '4',
+      season: '',
+      videoFormat: 'PAL'
     }));
     setError('');
   };
@@ -1255,7 +1293,12 @@ export default function IntakePage() {
                     {isLoading ? 'Looking up...' : 'Lookup'}
                   </button>
                   
-                  {/* DVDs require UPC - no manual entry option */}
+                  <button
+                    onClick={handleDVDManualEntry}
+                    className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium text-sm"
+                  >
+                    No Barcode?
+                  </button>
                 </div>
               </div>
 
@@ -1336,17 +1379,60 @@ export default function IntakePage() {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Format *</label>
                 <select
                         value={dvdFormData.format}
                         onChange={(e) => setDvdFormData(prev => ({ ...prev, format: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        required
                       >
                         <option value="DVD">DVD</option>
                         <option value="Blu-ray">Blu-ray</option>
-                        <option value="4K UHD">4K UHD</option>
-                        <option value="DVD Box Set">DVD Box Set</option>
-                        <option value="Blu-ray Box Set">Blu-ray Box Set</option>
+                        <option value="4K">4K</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Region</label>
+                      <select
+                        value={dvdFormData.region}
+                        onChange={(e) => setDvdFormData(prev => ({ ...prev, region: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="Region A">Region A</option>
+                        <option value="Region B">Region B</option>
+                        <option value="Region C">Region C</option>
+                        <option value="All Region">All Region</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Season</label>
+                      <input
+                        type="text"
+                        value={dvdFormData.season}
+                        onChange={(e) => setDvdFormData(prev => ({ ...prev, season: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        placeholder="e.g., Season 1, Complete Series"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Video Format</label>
+                      <select
+                        value={dvdFormData.videoFormat}
+                        onChange={(e) => setDvdFormData(prev => ({ ...prev, videoFormat: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="PAL">PAL</option>
+                        <option value="NTSC">NTSC</option>
                       </select>
                     </div>
 
@@ -1502,7 +1588,7 @@ export default function IntakePage() {
                 </div>
                 
                 <div className="flex flex-col space-y-2">
-                  <button
+              <button
                     onClick={() => fetchCDData(barcodeInput.trim())}
                     disabled={isLoading || barcodeInput.trim().length < 8 || cdManualEntry}
                     className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
@@ -1516,7 +1602,7 @@ export default function IntakePage() {
                   >
                     No Barcode?
                   </button>
-                </div>
+            </div>
               </div>
 
               {error && (
@@ -1555,41 +1641,41 @@ export default function IntakePage() {
                     
                     {/* Essential Fields - First Row */}
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
-                        <input
-                          type="text"
-                          value={cdFormData.barcode}
-                          onChange={(e) => setCdFormData(prev => ({ ...prev, barcode: e.target.value }))}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
+                      <input
+                        type="text"
+                        value={cdFormData.barcode}
+                        onChange={(e) => setCdFormData(prev => ({ ...prev, barcode: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                          readOnly={!cdManualEntry}
+                        readOnly={!cdManualEntry}
                           placeholder="Optional - leave blank for manual entry"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                        <input
-                          type="text"
-                          value={cdFormData.title}
-                          onChange={(e) => setCdFormData(prev => ({ ...prev, title: e.target.value }))}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                      <input
+                        type="text"
+                        value={cdFormData.title}
+                        onChange={(e) => setCdFormData(prev => ({ ...prev, title: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Artist</label>
-                        <input
-                          type="text"
-                          value={cdFormData.artist}
-                          onChange={(e) => setCdFormData(prev => ({ ...prev, artist: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Artist</label>
+                      <input
+                        type="text"
+                        value={cdFormData.artist}
+                        onChange={(e) => setCdFormData(prev => ({ ...prev, artist: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                        />
+                      />
                       </div>
                     </div>
-                  </div>
-
+                    </div>
+                    
                   {/* Main Form Fields */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
@@ -1688,17 +1774,17 @@ export default function IntakePage() {
                   
                   {/* Condition Notes and Duplicate Warning */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Condition Notes</label>
-                      <textarea
-                        value={cdFormData.conditionNotes}
-                        onChange={(e) => setCdFormData(prev => ({ ...prev, conditionNotes: e.target.value }))}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Condition Notes</label>
+                    <textarea
+                      value={cdFormData.conditionNotes}
+                      onChange={(e) => setCdFormData(prev => ({ ...prev, conditionNotes: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                         rows={2}
-                        placeholder="Any scratches, missing booklet, etc."
-                      />
-                    </div>
+                      placeholder="Any scratches, missing booklet, etc."
+                    />
                   </div>
+                      </div>
                   
                   <button
                     type="submit"

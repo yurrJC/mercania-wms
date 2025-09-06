@@ -30,7 +30,10 @@ const IntakeSchema = z.object({
   dvdMetadata: z.object({
     genre: z.string().nullable().optional(), // Allow null genre
     rating: z.string().nullable().optional(), // Allow null rating
-    runtime: z.number().nullable().optional() // Allow null runtime
+    runtime: z.number().nullable().optional(), // Allow null runtime
+    region: z.string().nullable().optional(), // Allow null region
+    season: z.string().nullable().optional(), // Allow null season
+    videoFormat: z.string().nullable().optional() // Allow null video format
   }).optional(),
   cdMetadata: z.object({
     genre: z.string().nullable().optional(), // Allow null genre
