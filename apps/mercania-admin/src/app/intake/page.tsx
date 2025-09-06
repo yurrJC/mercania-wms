@@ -888,7 +888,7 @@ export default function IntakePage() {
                     Movies, TV shows, documentaries, and video content
                   </p>
                   <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-medium">
-                    eBay UPC Lookup
+                    Manual Entry
                   </div>
                 </div>
               </button>
@@ -904,7 +904,7 @@ export default function IntakePage() {
                     Music albums, audiobooks, and audio content
                   </p>
                   <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium">
-                    eBay Catalog API
+                    MusicBrainz API
                   </div>
                 </div>
               </button>
