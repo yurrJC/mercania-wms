@@ -322,8 +322,8 @@ router.post('/', async (req, res): Promise<any> => {
       orderBy: { createdAt: 'desc' }
     }) : [];
 
-    // Create or update ISBN/UPC master record (only for items with barcodes)
-    // Manual books and CDs with no barcode will not have a master record - they're tracked by internal ID only
+    // Create or update ISBN/UPC master record
+    // For manual entries, create a master record with a generated identifier so inventory display works
     let isbnMaster = null;
     if (identifier) {
       try {
@@ -370,44 +370,61 @@ router.post('/', async (req, res): Promise<any> => {
           details: isbnError
         });
       }
+    } else {
+      // For manual entries without barcode, create a master record with a generated identifier
+      // This ensures the inventory screen can display the title and author properly
+      try {
+        const manualIdentifier = `M${productType.charAt(0)}${Date.now()}`; // e.g., "MC1703123456789"
+        console.log('Creating manual master record with identifier:', manualIdentifier);
+        
+        isbnMaster = await prisma.isbnMaster.create({
+          data: {
+            isbn: manualIdentifier,
+            title: itemData.title,
+            author: itemData.author,
+            publisher: itemData.publisher,
+            pubYear: itemData.pubYear,
+            binding: itemData.binding,
+            imageUrl: itemData.imageUrl,
+            categories: itemData.categories
+          }
+        });
+        console.log('Manual master record created successfully');
+        
+        // Update identifier to use the generated one
+        identifier = manualIdentifier;
+      } catch (manualError) {
+        console.error('Error creating manual master record:', manualError);
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to create manual master record',
+          details: manualError
+        });
+      }
     }
 
     // Create new item (PostgreSQL auto-generates sequential ID)
-    // For manual books and CDs, isbn will be null and there's no isbnMaster relation
+    // All items now have an identifier (either barcode or generated for manual entries)
     console.log('=== CREATING ITEM ===');
     console.log('Item data to create:', JSON.stringify(itemData, null, 2));
     console.log('Creating item with identifier:', identifier);
     
     let item;
     try {
-      if (identifier) {
-        // Item with ISBN/barcode - include the master relation
-        console.log('Creating item with identifier:', identifier);
-        item = await prisma.item.create({
-          data: {
-            isbn: identifier,
-            conditionGrade: validatedData.conditionGrade,
-            conditionNotes: validatedData.conditionNotes,
-            costCents: validatedData.costCents,
-            currentStatus: 'INTAKE'
-          },
-          include: {
-            isbnMaster: true
-          }
-        });
-      } else {
-        // Manual entry without barcode - no master relation
-        console.log('Creating manual entry without identifier');
-        item = await prisma.item.create({
-          data: {
-            isbn: null, // Explicitly set to null for manual entries
-            conditionGrade: validatedData.conditionGrade,
-            conditionNotes: validatedData.conditionNotes,
-            costCents: validatedData.costCents,
-            currentStatus: 'INTAKE'
-          }
-        });
-      }
+      // All items now have an identifier and master relation
+      console.log('Creating item with identifier:', identifier);
+      item = await prisma.item.create({
+        data: {
+          isbn: identifier,
+          conditionGrade: validatedData.conditionGrade,
+          conditionNotes: validatedData.conditionNotes,
+          costCents: validatedData.costCents,
+          currentStatus: 'INTAKE'
+        },
+        include: {
+          isbnMaster: true
+        }
+      });
       console.log('Item created successfully with ID:', item.id);
     } catch (itemError) {
       console.error('Error creating item:', itemError);
@@ -453,16 +470,7 @@ router.post('/', async (req, res): Promise<any> => {
       data: {
         item,
         internalId: item.id, // Return the simple integer ID
-        // For manual entries without barcode, include the metadata directly
-        ...(identifier ? {} : { 
-          [productType === 'BOOK' ? 'bookMetadata' : 'cdMetadata']: {
-            title: itemData.title,
-            author: itemData.author,
-            publisher: itemData.publisher,
-            pubYear: itemData.pubYear,
-            binding: itemData.binding
-          }
-        }),
+        // All items now have isbnMaster data, so no need for separate metadata
         zplTemplate: `/zpl/mercania_item_label.zpl?internalId=${item.id}&itemTitle=${encodeURIComponent(itemData.title)}&intakeDate=${new Date().toISOString().split('T')[0]}`
       }
     });
