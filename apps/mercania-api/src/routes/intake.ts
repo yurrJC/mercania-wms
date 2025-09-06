@@ -22,6 +22,7 @@ const IntakeSchema = z.object({
   publisher: z.string().optional(), // For DVDs, this will be the studio
   pubYear: z.number().nullable().optional(), // Release year
   binding: z.string().optional(), // For DVDs, this will be the format
+  imageUrl: z.string().nullable().optional(), // Cover art URL for books, DVDs, and CDs
   conditionGrade: z.string().optional(),
   conditionNotes: z.string().optional(),
   costCents: z.number().int().min(0).default(0),
@@ -251,7 +252,7 @@ router.post('/', async (req, res): Promise<any> => {
         publisher: validatedData.publisher || 'Unknown Label',
         pubYear: validatedData.pubYear || null,
         binding: validatedData.binding || 'CD',
-        imageUrl: null,
+        imageUrl: validatedData.imageUrl || null, // Use the cover art URL from frontend
         categories: validatedData.cdMetadata?.genre ? [validatedData.cdMetadata.genre] : []
       };
     } else {
@@ -275,7 +276,7 @@ router.post('/', async (req, res): Promise<any> => {
           publisher: validatedData.publisher || 'Unknown Label',
           pubYear: validatedData.pubYear || null,
           binding: validatedData.binding || 'CD',
-          imageUrl: null,
+          imageUrl: validatedData.imageUrl || null, // Use the cover art URL from frontend
           categories: validatedData.cdMetadata?.genre ? [validatedData.cdMetadata.genre] : []
         };
       } else if (identifier) {
@@ -288,6 +289,7 @@ router.post('/', async (req, res): Promise<any> => {
         if (validatedData.publisher) itemData.publisher = validatedData.publisher;
         if (validatedData.pubYear) itemData.pubYear = validatedData.pubYear;
         if (validatedData.binding) itemData.binding = validatedData.binding;
+        if (validatedData.imageUrl) itemData.imageUrl = validatedData.imageUrl;
       } else {
         // Manual book without barcode - use provided data only
         itemData = {
@@ -296,7 +298,7 @@ router.post('/', async (req, res): Promise<any> => {
           publisher: validatedData.publisher || 'Unknown Publisher',
           pubYear: validatedData.pubYear || null,
           binding: validatedData.binding || 'Unknown',
-          imageUrl: null,
+          imageUrl: validatedData.imageUrl || null,
           categories: []
         };
       }
