@@ -85,7 +85,7 @@ export default function PutawayPage() {
         throw new Error('No recent putaway activity in this session');
       }
 
-      const response = await apiCall('http://localhost:3001/api/items/putaway-activity/pdf', {
+      const response = await apiCall('/api/items/putaway-activity/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: sessionRows })
@@ -126,7 +126,7 @@ export default function PutawayPage() {
 
     try {
       // Use barcode search for first-copy priority
-      const response = await apiCall(`http://localhost:3001/api/items?isbn=${barcode.trim()}&limit=1`);
+      const response = await apiCall(`/api/items?isbn=${barcode.trim()}&limit=1`);
       console.log(`Putaway: Barcode search for ${barcode.trim()} (first-copy priority)`);
       
       if (!response.ok) {
@@ -164,7 +164,7 @@ export default function PutawayPage() {
 
     try {
       // Use ID search for specific item lookup
-      const response = await apiCall(`http://localhost:3001/api/items?search=${internalId.trim()}`);
+      const response = await apiCall(`/api/items?search=${internalId.trim()}`);
       console.log(`Putaway: Internal ID search for ${internalId.trim()} (specific item)`);
       
       if (!response.ok) {
@@ -226,7 +226,7 @@ export default function PutawayPage() {
     setError('');
 
     try {
-      const response = await apiCall(`http://localhost:3001/api/lots/${lotNumber}`);
+      const response = await apiCall(`/api/lots/${lotNumber}`);
       
       if (!response.ok) {
         throw new Error('Lot not found');
@@ -266,7 +266,7 @@ export default function PutawayPage() {
     try {
       if (mode === 'item' && currentItem) {
         // Update single item location
-        const response = await apiCall(`http://localhost:3001/api/items/${currentItem.id}`, {
+        const response = await apiCall(`/api/items/${currentItem.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ currentLocation: location.toUpperCase() })
@@ -294,7 +294,7 @@ export default function PutawayPage() {
         // Update all items in lot
         const itemIds = currentLot.items.map(item => item.id);
         
-        const response = await apiCall('http://localhost:3001/api/items/bulk-location', {
+        const response = await apiCall('/api/items/bulk-location', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 

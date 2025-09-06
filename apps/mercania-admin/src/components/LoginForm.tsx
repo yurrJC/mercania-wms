@@ -20,7 +20,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/auth/login', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://mercania-wms.onrender.com'}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

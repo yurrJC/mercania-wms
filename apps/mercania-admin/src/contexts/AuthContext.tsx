@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyToken = async (tokenToVerify: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/auth/verify`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://mercania-wms.onrender.com'}/api/auth/verify`, {
         headers: {
           'Authorization': `Bearer ${tokenToVerify}`,
         },

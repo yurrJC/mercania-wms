@@ -18,7 +18,7 @@ export default function DebugPage() {
       console.log('Testing API connection...');
       
       // Test direct API
-      const response = await apiCall('http://localhost:3001/api/items');
+      const response = await apiCall('/api/items');
       console.log('Response status:', response.status);
       
       if (!response.ok) {

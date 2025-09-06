@@ -3,7 +3,7 @@ export const apiCall = async (url: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('mercania_wms_token');
   
   // If URL doesn't start with http, prepend the API base URL
-  const fullUrl = url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${url}`;
+  const fullUrl = url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_API_URL || 'https://mercania-wms.onrender.com'}${url}`;
   
   const headers = {
     'Content-Type': 'application/json',

@@ -50,7 +50,7 @@ const transformItemData = (apiItem: any): ItemData => ({
 class ApiClient {
   private static async request<T>(url: string, options?: RequestInit): Promise<T> {
     try {
-      const response = await apiCall(`http://localhost:3001${url}`, {
+      const response = await apiCall(url, {
         headers: {
           'Content-Type': 'application/json',
           ...options?.headers,
