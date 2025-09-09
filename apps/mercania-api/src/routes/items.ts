@@ -1267,6 +1267,10 @@ router.delete('/:id', async (req, res) => {
       where: { itemId: itemId }
     });
 
+    await prisma.cOGSRecord.deleteMany({
+      where: { itemId: itemId }
+    });
+
     // Delete the item
     await prisma.item.delete({
       where: { id: itemId }
