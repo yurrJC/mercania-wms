@@ -231,6 +231,21 @@ export default function IntakePage() {
   }, [success, internalId, productType, isLoading, formData.title, dvdFormData.title, cdFormData.title]);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
+  // Utility function to format text as title case
+  const formatTitleCase = (text: string): string => {
+    return text
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  // Handle input changes with title case formatting
+  const handleTitleCaseInput = (value: string, setter: (value: any) => void, field: string) => {
+    const formattedValue = formatTitleCase(value);
+    setter((prev: any) => ({ ...prev, [field]: formattedValue }));
+  };
+
   useEffect(() => {
     if (productType === 'books' && isbnInputRef.current) {
       isbnInputRef.current.focus();
@@ -1116,7 +1131,7 @@ export default function IntakePage() {
                       <input
                         type="text"
                         value={formData.title}
-                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                        onChange={(e) => handleTitleCaseInput(e.target.value, setFormData, 'title')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                       />
@@ -1127,7 +1142,7 @@ export default function IntakePage() {
                       <input
                         type="text"
                         value={formData.author}
-                        onChange={(e) => setFormData(prev => ({ ...prev, author: e.target.value }))}
+                        onChange={(e) => handleTitleCaseInput(e.target.value, setFormData, 'author')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
@@ -1330,7 +1345,7 @@ export default function IntakePage() {
                       <input
                         type="text"
                         value={dvdFormData.title}
-                        onChange={(e) => setDvdFormData(prev => ({ ...prev, title: e.target.value }))}
+                        onChange={(e) => handleTitleCaseInput(e.target.value, setDvdFormData, 'title')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                         required
                       />
@@ -1341,7 +1356,7 @@ export default function IntakePage() {
                       <input
                         type="text"
                         value={dvdFormData.director}
-                        onChange={(e) => setDvdFormData(prev => ({ ...prev, director: e.target.value }))}
+                        onChange={(e) => handleTitleCaseInput(e.target.value, setDvdFormData, 'director')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
@@ -1647,7 +1662,7 @@ export default function IntakePage() {
                       <input
                         type="text"
                         value={cdFormData.title}
-                        onChange={(e) => setCdFormData(prev => ({ ...prev, title: e.target.value }))}
+                        onChange={(e) => handleTitleCaseInput(e.target.value, setCdFormData, 'title')}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                         required
                       />
@@ -1658,7 +1673,7 @@ export default function IntakePage() {
                       <input
                         type="text"
                         value={cdFormData.artist}
-                        onChange={(e) => setCdFormData(prev => ({ ...prev, artist: e.target.value }))}
+                        onChange={(e) => handleTitleCaseInput(e.target.value, setCdFormData, 'artist')}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                       />
                       </div>
