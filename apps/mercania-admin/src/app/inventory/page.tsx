@@ -661,7 +661,9 @@ export default function InventoryPage() {
   // Print intake label for individual item using new 80x40mm format
   const handlePrintIntakeLabel = async (item: Item) => {
     try {
-      const itemTitle = item.isbnMaster?.title || 'Unknown Item';
+      // Use the same formatting functions as the inventory display
+      const itemTitle = formatItemTitle(item);
+      const itemAuthor = formatItemAuthor(item);
       
       // Use new 80x40mm label endpoint with POST method
       const response = await apiCall('/labels', {
@@ -672,7 +674,7 @@ export default function InventoryPage() {
         body: JSON.stringify({
           internalID: item.id.toString(),
           title: itemTitle,
-          author: item.isbnMaster?.author || 'Unknown',
+          author: itemAuthor,
           qty: 1
         })
       });

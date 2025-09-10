@@ -418,7 +418,20 @@ export default function IntakePage() {
     }
 
     try {
-      const itemTitle = bookData?.title || dvdData?.title || cdData?.title || 'Unknown Item';
+      // Use form data instead of API response data for manual entries
+      let itemTitle = 'Unknown Item';
+      let itemAuthor = 'Unknown';
+      
+      if (productType === 'books') {
+        itemTitle = formData.title || bookData?.title || 'Unknown Item';
+        itemAuthor = formData.author || bookData?.author || 'Unknown';
+      } else if (productType === 'dvds') {
+        itemTitle = dvdFormData.title || dvdData?.title || 'Unknown Item';
+        itemAuthor = dvdFormData.director || dvdData?.director || 'Unknown';
+      } else if (productType === 'cds') {
+        itemTitle = cdFormData.title || cdData?.title || 'Unknown Item';
+        itemAuthor = cdFormData.artist || cdData?.artist || 'Unknown';
+      }
       
       // Use new 80x40mm label endpoint with POST method
       const response = await apiCall('/labels', {
@@ -429,7 +442,7 @@ export default function IntakePage() {
         body: JSON.stringify({
           internalID: internalId.toString(),
           title: itemTitle,
-          author: bookData?.author || dvdData?.director || cdData?.artist || 'Unknown',
+          author: itemAuthor,
           qty: 1
         })
       });
@@ -811,7 +824,10 @@ export default function IntakePage() {
               <h3 className="font-bold text-gray-900 mb-4">Label Preview (80mm x 40mm)</h3>
               <div className="bg-white border border-gray-400 p-3 text-left" style={{ width: '320px', height: '160px' }}>
                 <div className="text-lg font-bold text-gray-900 mb-2 leading-tight">
-                  {bookData?.title || dvdData?.title || cdData?.title || 'Unknown Item'}
+                  {productType === 'books' ? (formData.title || bookData?.title || 'Unknown Item') :
+                   productType === 'dvds' ? (dvdFormData.title || dvdData?.title || 'Unknown Item') :
+                   productType === 'cds' ? (cdFormData.title || cdData?.title || 'Unknown Item') :
+                   'Unknown Item'}
                 </div>
                 <div className="text-sm text-gray-700 mb-2">ID: {internalId}</div>
                 <div className="border border-gray-400 h-8 bg-black bg-opacity-10 flex items-center justify-center mb-2">
