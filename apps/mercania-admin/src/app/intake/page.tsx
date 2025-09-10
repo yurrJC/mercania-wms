@@ -189,6 +189,46 @@ export default function IntakePage() {
   useEffect(() => {
     loadPrinters();
   }, []);
+
+  // Global keyboard handler for Enter key shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Only handle Enter key
+      if (e.key !== 'Enter') return;
+      
+      // Don't trigger if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+        return;
+      }
+      
+      // Prevent default form submission behavior
+      e.preventDefault();
+      
+      // Handle different states
+      if (success && internalId) {
+        // Success page: Enter triggers "Add Another Item"
+        resetForm();
+      } else if (productType === 'books' && !isLoading && formData.title.trim()) {
+        // Book form: Enter triggers form submission
+        handleBookSubmit(e as any);
+      } else if (productType === 'dvds' && !isLoading && dvdFormData.title.trim()) {
+        // DVD form: Enter triggers form submission
+        handleDVDSubmit(e as any);
+      } else if (productType === 'cds' && !isLoading && cdFormData.title.trim()) {
+        // CD form: Enter triggers form submission
+        handleCDSubmit(e as any);
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('keydown', handleKeyPress);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [success, internalId, productType, isLoading, formData.title, dvdFormData.title, cdFormData.title]);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -808,6 +848,7 @@ export default function IntakePage() {
                 <Plus className="h-5 w-5 inline mr-2" />
                 Add Another Item
               </button>
+              <p className="text-xs text-gray-500 text-center mt-1">Press Enter to add another item</p>
               
               <Link
                 href="/putaway"
@@ -1064,6 +1105,7 @@ export default function IntakePage() {
                       </span>
                     )}
                   </button>
+                  <p className="text-xs text-gray-500 text-center mt-1">Press Enter to submit</p>
                 </div>
 
                 <form onSubmit={handleBookSubmit} className="space-y-3">
@@ -1500,6 +1542,7 @@ export default function IntakePage() {
                       {isLoading ? 'Adding DVD...' : 'Confirm & Add to Inventory'}
               </button>
             </div>
+            <p className="text-xs text-gray-500 text-center mt-1">Press Enter to submit</p>
           </form>
               </div>
             )}
@@ -1739,6 +1782,7 @@ export default function IntakePage() {
                   >
                     {isLoading ? 'Adding CD...' : 'Add CD to Inventory'}
                   </button>
+                  <p className="text-xs text-gray-500 text-center mt-1">Press Enter to submit</p>
           </form>
               </div>
             )}
