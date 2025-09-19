@@ -416,11 +416,11 @@ app.post('/labels', async (req, res) => {
          .fillColor('#000000')
          .text(`ID: ${internalID}`, 2, 17, { width: widthPoints - 4, align: 'left' });
 
-      // 4. BARCODE (Code 128 of internal ID) - perfectly centered
+      // 4. BARCODE (Code 128 of internal ID) - perfectly centered, moved down
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Good width for 40mm
-      const barcodeHeight = 10; // Adequate height for scanning
+      const barcodeHeight = 8; // Slightly smaller to fit better
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 26; // Positioned with good spacing from ID
+      const barcodeY = 30; // Moved down a bit for better spacing
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
@@ -435,26 +435,26 @@ app.post('/labels', async (req, res) => {
         year: '2-digit' 
       });
       
-      doc.fontSize(5)
+      doc.fontSize(4)
          .font('Helvetica')
          .fillColor('#666666')
-         .text(`Intake: ${intakeDate}`, 2, heightPoints - 10, { 
+         .text(`Intake: ${intakeDate}`, 2, heightPoints - 8, { 
            width: widthPoints - 4, 
            align: 'left' 
          });
 
-      // MERCANIA branding at the bottom-center (centered, bold)
-      doc.fontSize(5)
+      // MERCANIA branding at the bottom-center (centered, bold) - on first page
+      doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#1f2937')
-         .text('MERCANIA', 2, heightPoints - 5, { 
+         .text('MERCANIA', 2, heightPoints - 4, { 
            width: widthPoints - 4, 
            align: 'center' 
          });
 
       // Copy index if multiple copies
       if (quantity > 1) {
-        doc.fontSize(4)
+        doc.fontSize(3)
            .font('Helvetica-Bold')
            .fillColor('#dc2626')
            .text(`COPY ${copyIndexValue + i + 1}`, 2, heightPoints - 2, { 
