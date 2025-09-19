@@ -377,8 +377,8 @@ app.post('/labels', async (req, res) => {
 
       const barcodeBuffer = await bwipjs.toBuffer(barcodeOptions);
 
-      // Truncate title and author for 40mm width (maximize character count)
-      const maxTitleLength = 45; // Increased to show more of the title
+      // Truncate title and author for 40mm width (strict limits)
+      const maxTitleLength = 30; // Exactly 30 characters for title
       const maxAuthorLength = 40; // Increased to show more of the author
       const truncatedTitle = displayTitle.length > maxTitleLength 
         ? displayTitle.substring(0, maxTitleLength) + '...' 
@@ -391,8 +391,8 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top (left-aligned, bold, scaled down) - maximize width usage
-      doc.fontSize(6)
+      // 1. TITLE at the top (left-aligned, bold, same size as author) - exactly 30 chars
+      doc.fontSize(5)
          .font('Helvetica-Bold')
          .fillColor('#000000')
          .text(truncatedTitle, 1, 1, { 
