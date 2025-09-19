@@ -377,9 +377,9 @@ app.post('/labels', async (req, res) => {
 
       const barcodeBuffer = await bwipjs.toBuffer(barcodeOptions);
 
-      // Truncate title and author for 40mm width (use more width)
-      const maxTitleLength = 25; // Use more of the 40mm width
-      const maxAuthorLength = 20; // Use more width for author line
+      // Truncate title and author for 40mm width (use maximum width like template)
+      const maxTitleLength = 35; // Use maximum width like in template
+      const maxAuthorLength = 30; // Use maximum width for author line
       const truncatedTitle = displayTitle.length > maxTitleLength 
         ? displayTitle.substring(0, maxTitleLength) + '...' 
         : displayTitle;
@@ -391,8 +391,8 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top (left-aligned, bold, 7pt font)
-      doc.fontSize(7)
+      // 1. TITLE at the top (left-aligned, bold, largest font)
+      doc.fontSize(8)
          .font('Helvetica-Bold')
          .fillColor('#000000')
          .text(truncatedTitle, 2, 2, { 
@@ -401,33 +401,33 @@ app.post('/labels', async (req, res) => {
            lineGap: 0.5
          });
 
-      // 2. AUTHOR just under title (left-aligned, 6pt font)
+      // 2. AUTHOR just under title (left-aligned, smaller than title)
       doc.fontSize(6)
          .font('Helvetica')
          .fillColor('#333333')
-         .text(truncatedAuthor, 2, 9, { 
+         .text(truncatedAuthor, 2, 10, { 
            width: widthPoints - 4, 
            align: 'left' 
          });
 
-      // 3. INTERNAL ID (left-aligned and bold, 5pt font)
-      doc.fontSize(5)
+      // 3. INTERNAL ID (left-aligned and bold, same size as author)
+      doc.fontSize(6)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`ID: ${internalID}`, 2, 15, { width: widthPoints - 4, align: 'left' });
+         .text(`ID: ${internalID}`, 2, 17, { width: widthPoints - 4, align: 'left' });
 
       // 4. BARCODE (Code 128 of internal ID) - perfectly centered
-      const barcodeWidth = Math.min(widthPoints - 4, 80); // Use more width
-      const barcodeHeight = 8; // Slightly larger for better scanning
+      const barcodeWidth = Math.min(widthPoints - 4, 70); // Good width for 40mm
+      const barcodeHeight = 10; // Adequate height for scanning
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 22; // Positioned to fit everything on one page
+      const barcodeY = 26; // Positioned with good spacing from ID
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
         height: barcodeHeight 
       });
 
-      // 5. INTAKE DATE at the bottom (left-aligned)
+      // 5. INTAKE DATE at the bottom-left (left-aligned)
       const now = new Date();
       const intakeDate = now.toLocaleDateString('en-US', { 
         month: '2-digit', 
@@ -435,26 +435,26 @@ app.post('/labels', async (req, res) => {
         year: '2-digit' 
       });
       
-      doc.fontSize(4)
+      doc.fontSize(5)
          .font('Helvetica')
          .fillColor('#666666')
-         .text(`Intake: ${intakeDate}`, 2, heightPoints - 8, { 
+         .text(`Intake: ${intakeDate}`, 2, heightPoints - 10, { 
            width: widthPoints - 4, 
            align: 'left' 
          });
 
-      // MERCANIA branding at the bottom (centered, bold)
-      doc.fontSize(4)
+      // MERCANIA branding at the bottom-center (centered, bold)
+      doc.fontSize(5)
          .font('Helvetica-Bold')
          .fillColor('#1f2937')
-         .text('MERCANIA', 2, heightPoints - 4, { 
+         .text('MERCANIA', 2, heightPoints - 5, { 
            width: widthPoints - 4, 
            align: 'center' 
          });
 
       // Copy index if multiple copies
       if (quantity > 1) {
-        doc.fontSize(3)
+        doc.fontSize(4)
            .font('Helvetica-Bold')
            .fillColor('#dc2626')
            .text(`COPY ${copyIndexValue + i + 1}`, 2, heightPoints - 2, { 
