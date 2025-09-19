@@ -395,7 +395,7 @@ app.post('/labels', async (req, res) => {
       doc.fontSize(5)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(truncatedTitle, 4, 3, { 
+         .text(truncatedTitle, 4, 7, { 
            width: widthPoints - 8, 
            align: 'left',
            lineGap: 0.5
@@ -405,7 +405,7 @@ app.post('/labels', async (req, res) => {
       doc.fontSize(5)
          .font('Helvetica')
          .fillColor('#333333')
-         .text(truncatedAuthor, 4, 10, { 
+         .text(truncatedAuthor, 4, 14, { 
            width: widthPoints - 8, 
            align: 'left' 
          });
@@ -414,13 +414,13 @@ app.post('/labels', async (req, res) => {
       doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`ID: ${internalID}`, 4, 16, { width: widthPoints - 8, align: 'left' });
+         .text(`ID: ${internalID}`, 4, 20, { width: widthPoints - 8, align: 'left' });
 
-      // 4. BARCODE (Code 128 of internal ID) - perfectly centered, adjusted for smaller text
+      // 4. BARCODE (Code 128 of internal ID) - perfectly centered, moved down 4 points
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Good width for 40mm
       const barcodeHeight = 8; // Slightly smaller to fit better
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 22; // Adjusted for smaller text above
+      const barcodeY = 26; // Moved down 4 points from 22 to 26
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
