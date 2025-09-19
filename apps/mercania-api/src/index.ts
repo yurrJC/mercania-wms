@@ -438,16 +438,16 @@ app.post('/labels', async (req, res) => {
       doc.fontSize(4)
          .font('Helvetica')
          .fillColor('#666666')
-         .text(`Intake: ${intakeDate}`, 2, heightPoints - 8, { 
+         .text(`Intake: ${intakeDate}`, 2, heightPoints - 12, { 
            width: widthPoints - 4, 
            align: 'left' 
          });
 
-      // MERCANIA branding at the bottom-center (centered, bold) - on first page
+      // MERCANIA branding at the bottom-center (centered, bold) - within label bounds
       doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#1f2937')
-         .text('MERCANIA', 2, heightPoints - 4, { 
+         .text('MERCANIA', 2, heightPoints - 6, { 
            width: widthPoints - 4, 
            align: 'center' 
          });
@@ -457,7 +457,7 @@ app.post('/labels', async (req, res) => {
         doc.fontSize(3)
            .font('Helvetica-Bold')
            .fillColor('#dc2626')
-           .text(`COPY ${copyIndexValue + i + 1}`, 2, heightPoints - 2, { 
+           .text(`COPY ${copyIndexValue + i + 1}`, 2, heightPoints - 3, { 
              width: widthPoints - 4, 
              align: 'right' 
            });
