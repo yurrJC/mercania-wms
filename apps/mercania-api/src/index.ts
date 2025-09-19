@@ -416,11 +416,11 @@ app.post('/labels', async (req, res) => {
          .fillColor('#000000')
          .text(`ID: ${internalID}`, 4, 20, { width: widthPoints - 8, align: 'left' });
 
-      // 4. BARCODE (Code 128 of internal ID) - perfectly centered, moved down 4 points
+      // 4. BARCODE (Code 128 of internal ID) - perfectly centered, moved down another 4 points
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Good width for 40mm
       const barcodeHeight = 8; // Slightly smaller to fit better
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 26; // Moved down 4 points from 22 to 26
+      const barcodeY = 30; // Moved down another 4 points from 26 to 30
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
