@@ -391,21 +391,21 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top (left-aligned, bold, scaled down)
+      // 1. TITLE at the top (left-aligned, bold, scaled down) - ensure no overlap
       doc.fontSize(6)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(truncatedTitle, 2, 2, { 
+         .text(truncatedTitle, 2, 1, { 
            width: widthPoints - 4, 
            align: 'left',
            lineGap: 0.5
          });
 
-      // 2. AUTHOR just under title (left-aligned, smaller than title)
+      // 2. AUTHOR just under title (left-aligned, smaller than title) - proper spacing
       doc.fontSize(5)
          .font('Helvetica')
          .fillColor('#333333')
-         .text(truncatedAuthor, 2, 9, { 
+         .text(truncatedAuthor, 2, 8, { 
            width: widthPoints - 4, 
            align: 'left' 
          });
@@ -414,7 +414,7 @@ app.post('/labels', async (req, res) => {
       doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`ID: ${internalID}`, 2, 15, { width: widthPoints - 4, align: 'left' });
+         .text(`ID: ${internalID}`, 2, 14, { width: widthPoints - 4, align: 'left' });
 
       // 4. BARCODE (Code 128 of internal ID) - perfectly centered, adjusted for smaller text
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Good width for 40mm
