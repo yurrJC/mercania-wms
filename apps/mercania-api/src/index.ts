@@ -366,20 +366,20 @@ app.post('/labels', async (req, res) => {
       const barcodeOptions = {
         bcid: 'code128',        // Barcode type
         text: String(internalID), // Text to encode
-        scale: 0.8,             // Further reduced scale for smaller label
-        height: 6,              // Further reduced height for smaller label
+        scale: 1.2,             // Increased scale for better readability
+        height: 8,              // Increased height for better scanning
         includetext: false,     // Don't include text below barcode
         textxalign: 'center' as const,   // Center text if included
         quietzones: true,       // Include quiet zones
-        quietzone: 1,           // Minimal quiet zone for smaller label
-        width: 1                // Thinner bars for smaller label
+        quietzone: 2,           // Adequate quiet zone
+        width: 1                // Appropriate bar width
       };
 
       const barcodeBuffer = await bwipjs.toBuffer(barcodeOptions);
 
-      // Truncate title and author for 40mm width (optimized for readability)
-      const maxTitleLength = 15; // Optimized for 40mm width
-      const maxAuthorLength = 12; // Shorter for author line
+      // Truncate title and author for 40mm width (use more width)
+      const maxTitleLength = 25; // Use more of the 40mm width
+      const maxAuthorLength = 20; // Use more width for author line
       const truncatedTitle = displayTitle.length > maxTitleLength 
         ? displayTitle.substring(0, maxTitleLength) + '...' 
         : displayTitle;
@@ -391,36 +391,36 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top (left-aligned, bold, 6pt font)
-      doc.fontSize(6)
+      // 1. TITLE at the top (left-aligned, bold, 7pt font)
+      doc.fontSize(7)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(truncatedTitle, 3, 2, { 
-           width: widthPoints - 6, 
+         .text(truncatedTitle, 2, 2, { 
+           width: widthPoints - 4, 
            align: 'left',
            lineGap: 0.5
          });
 
-      // 2. AUTHOR just under title (left-aligned, 5pt font)
-      doc.fontSize(5)
+      // 2. AUTHOR just under title (left-aligned, 6pt font)
+      doc.fontSize(6)
          .font('Helvetica')
          .fillColor('#333333')
-         .text(truncatedAuthor, 3, 8, { 
-           width: widthPoints - 6, 
+         .text(truncatedAuthor, 2, 9, { 
+           width: widthPoints - 4, 
            align: 'left' 
          });
 
-      // 3. INTERNAL ID (left-aligned and bold, 4pt font)
-      doc.fontSize(4)
+      // 3. INTERNAL ID (left-aligned and bold, 5pt font)
+      doc.fontSize(5)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`ID: ${internalID}`, 3, 13, { width: widthPoints - 6, align: 'left' });
+         .text(`ID: ${internalID}`, 2, 15, { width: widthPoints - 4, align: 'left' });
 
       // 4. BARCODE (Code 128 of internal ID) - perfectly centered
-      const barcodeWidth = Math.min(widthPoints - 8, 60); // Further reduced width
-      const barcodeHeight = 6; // Further reduced height
+      const barcodeWidth = Math.min(widthPoints - 4, 80); // Use more width
+      const barcodeHeight = 8; // Slightly larger for better scanning
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 18; // Moved up for better fit
+      const barcodeY = 22; // Positioned to fit everything on one page
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
@@ -435,30 +435,30 @@ app.post('/labels', async (req, res) => {
         year: '2-digit' 
       });
       
-      doc.fontSize(3)
+      doc.fontSize(4)
          .font('Helvetica')
          .fillColor('#666666')
-         .text(`Intake: ${intakeDate}`, 3, heightPoints - 6, { 
-           width: widthPoints - 6, 
+         .text(`Intake: ${intakeDate}`, 2, heightPoints - 8, { 
+           width: widthPoints - 4, 
            align: 'left' 
          });
 
       // MERCANIA branding at the bottom (centered, bold)
-      doc.fontSize(3)
+      doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#1f2937')
-         .text('MERCANIA', 3, heightPoints - 3, { 
-           width: widthPoints - 6, 
+         .text('MERCANIA', 2, heightPoints - 4, { 
+           width: widthPoints - 4, 
            align: 'center' 
          });
 
       // Copy index if multiple copies
       if (quantity > 1) {
-        doc.fontSize(2)
+        doc.fontSize(3)
            .font('Helvetica-Bold')
            .fillColor('#dc2626')
-           .text(`COPY ${copyIndexValue + i + 1}`, 3, heightPoints - 2, { 
-             width: widthPoints - 6, 
+           .text(`COPY ${copyIndexValue + i + 1}`, 2, heightPoints - 2, { 
+             width: widthPoints - 4, 
              align: 'right' 
            });
       }
