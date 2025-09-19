@@ -377,9 +377,9 @@ app.post('/labels', async (req, res) => {
 
       const barcodeBuffer = await bwipjs.toBuffer(barcodeOptions);
 
-      // Truncate title and author for 40mm width (use maximum width like template)
-      const maxTitleLength = 35; // Use maximum width like in template
-      const maxAuthorLength = 30; // Use maximum width for author line
+      // Truncate title and author for 40mm width (maximize character count)
+      const maxTitleLength = 45; // Increased to show more of the title
+      const maxAuthorLength = 40; // Increased to show more of the author
       const truncatedTitle = displayTitle.length > maxTitleLength 
         ? displayTitle.substring(0, maxTitleLength) + '...' 
         : displayTitle;
@@ -391,30 +391,30 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top (left-aligned, bold, scaled down) - ensure no overlap
+      // 1. TITLE at the top (left-aligned, bold, scaled down) - maximize width usage
       doc.fontSize(6)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(truncatedTitle, 2, 1, { 
-           width: widthPoints - 4, 
+         .text(truncatedTitle, 1, 1, { 
+           width: widthPoints - 2, 
            align: 'left',
            lineGap: 0.5
          });
 
-      // 2. AUTHOR just under title (left-aligned, smaller than title) - proper spacing
+      // 2. AUTHOR just under title (left-aligned, smaller than title) - maximize width usage
       doc.fontSize(5)
          .font('Helvetica')
          .fillColor('#333333')
-         .text(truncatedAuthor, 2, 8, { 
-           width: widthPoints - 4, 
+         .text(truncatedAuthor, 1, 8, { 
+           width: widthPoints - 2, 
            align: 'left' 
          });
 
-      // 3. INTERNAL ID (left-aligned and bold, smaller than author)
+      // 3. INTERNAL ID (left-aligned and bold, smaller than author) - maximize width usage
       doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`ID: ${internalID}`, 2, 14, { width: widthPoints - 4, align: 'left' });
+         .text(`ID: ${internalID}`, 1, 14, { width: widthPoints - 2, align: 'left' });
 
       // 4. BARCODE (Code 128 of internal ID) - perfectly centered, adjusted for smaller text
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Good width for 40mm
@@ -438,8 +438,8 @@ app.post('/labels', async (req, res) => {
       doc.fontSize(4)
          .font('Helvetica')
          .fillColor('#666666')
-         .text(`Intake: ${intakeDate}`, 2, heightPoints - 12, { 
-           width: widthPoints - 4, 
+         .text(`Intake: ${intakeDate}`, 1, heightPoints - 12, { 
+           width: widthPoints - 2, 
            align: 'left' 
          });
 
@@ -447,8 +447,8 @@ app.post('/labels', async (req, res) => {
       doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#1f2937')
-         .text('MERCANIA', 2, heightPoints - 6, { 
-           width: widthPoints - 4, 
+         .text('MERCANIA', 1, heightPoints - 6, { 
+           width: widthPoints - 2, 
            align: 'center' 
          });
 
@@ -457,8 +457,8 @@ app.post('/labels', async (req, res) => {
         doc.fontSize(3)
            .font('Helvetica-Bold')
            .fillColor('#dc2626')
-           .text(`COPY ${copyIndexValue + i + 1}`, 2, heightPoints - 3, { 
-             width: widthPoints - 4, 
+           .text(`COPY ${copyIndexValue + i + 1}`, 1, heightPoints - 3, { 
+             width: widthPoints - 2, 
              align: 'right' 
            });
       }
