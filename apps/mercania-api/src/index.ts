@@ -391,30 +391,30 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top (left-aligned, bold, same size as author) - exactly 30 chars
+      // 1. TITLE at the top (moved right and down for printing) - exactly 30 chars
       doc.fontSize(5)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(truncatedTitle, 1, 1, { 
-           width: widthPoints - 2, 
+         .text(truncatedTitle, 4, 3, { 
+           width: widthPoints - 8, 
            align: 'left',
            lineGap: 0.5
          });
 
-      // 2. AUTHOR just under title (left-aligned, smaller than title) - maximize width usage
+      // 2. AUTHOR just under title (moved right and down for printing)
       doc.fontSize(5)
          .font('Helvetica')
          .fillColor('#333333')
-         .text(truncatedAuthor, 1, 8, { 
-           width: widthPoints - 2, 
+         .text(truncatedAuthor, 4, 10, { 
+           width: widthPoints - 8, 
            align: 'left' 
          });
 
-      // 3. INTERNAL ID (left-aligned and bold, smaller than author) - maximize width usage
+      // 3. INTERNAL ID (moved right and down for printing)
       doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`ID: ${internalID}`, 1, 14, { width: widthPoints - 2, align: 'left' });
+         .text(`ID: ${internalID}`, 4, 16, { width: widthPoints - 8, align: 'left' });
 
       // 4. BARCODE (Code 128 of internal ID) - perfectly centered, adjusted for smaller text
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Good width for 40mm
@@ -427,7 +427,7 @@ app.post('/labels', async (req, res) => {
         height: barcodeHeight 
       });
 
-      // 5. INTAKE DATE at the bottom-left (left-aligned)
+      // 5. INTAKE DATE at the bottom-left (moved right for printing)
       const now = new Date();
       const intakeDate = now.toLocaleDateString('en-US', { 
         month: '2-digit', 
@@ -438,8 +438,8 @@ app.post('/labels', async (req, res) => {
       doc.fontSize(4)
          .font('Helvetica')
          .fillColor('#666666')
-         .text(`Intake: ${intakeDate}`, 1, heightPoints - 12, { 
-           width: widthPoints - 2, 
+         .text(`Intake: ${intakeDate}`, 4, heightPoints - 12, { 
+           width: widthPoints - 8, 
            align: 'left' 
          });
 
@@ -457,8 +457,8 @@ app.post('/labels', async (req, res) => {
         doc.fontSize(3)
            .font('Helvetica-Bold')
            .fillColor('#dc2626')
-           .text(`COPY ${copyIndexValue + i + 1}`, 1, heightPoints - 3, { 
-             width: widthPoints - 2, 
+           .text(`COPY ${copyIndexValue + i + 1}`, 4, heightPoints - 3, { 
+             width: widthPoints - 8, 
              align: 'right' 
            });
       }
