@@ -295,7 +295,7 @@ app.get('/api/label-pdf', (req, res) => {
   }
 });
 
-// New multi-page PDF label endpoint with bwip-js - optimized for 80x40mm
+// New multi-page PDF label endpoint with bwip-js - optimized for 40x20mm
 app.post('/labels', async (req, res) => {
   try {
     const { internalID, title, author, copyIndex, labelSize, qty } = req.body;
@@ -306,31 +306,31 @@ app.post('/labels', async (req, res) => {
       return;
     }
 
-    // Set defaults - force 80x40mm for inventory management
+    // Set defaults - force 40x20mm for inventory management
     const quantity = qty || 1;
-    const labelSizeValue = '80x40mm'; // Fixed size for inventory labels
+    const labelSizeValue = '40x20mm'; // Fixed size for inventory labels
     const displayTitle = title || 'Unknown Item';
     const displayAuthor = author || 'Unknown Author';
     const copyIndexValue = copyIndex || 0;
 
-    // Parse label size (80x40mm)
-    const widthMm = 80;
-    const heightMm = 40;
+    // Parse label size (40x20mm)
+    const widthMm = 40;
+    const heightMm = 20;
     
     // Convert mm to points (1mm = 2.834645669 points)
-    const widthPoints = widthMm * 2.834645669;  // 226.77 points
-    const heightPoints = heightMm * 2.834645669; // 113.39 points
+    const widthPoints = widthMm * 2.834645669;  // 113.39 points
+    const heightPoints = heightMm * 2.834645669; // 56.69 points
     
-    // Exact dimensions: 80mm × 40mm = 226.77 × 113.39 points
+    // Exact dimensions: 40mm × 20mm = 113.39 × 56.69 points
 
-    // Create PDF document with proper MediaBox and CropBox for 80x40mm
+    // Create PDF document with proper MediaBox and CropBox for 40x20mm
     const doc = new PDFDocument({ 
       size: [widthPoints, heightPoints],
       margin: 0,
       layout: 'portrait'
     });
     
-    // Set MediaBox and CropBox to exact 80x40mm dimensions
+    // Set MediaBox and CropBox to exact 40x20mm dimensions
     // This ensures accurate printing dimensions for thermal label printers
     if (doc.page) {
       (doc.page as any).mediaBox = [0, 0, widthPoints, heightPoints];
@@ -362,24 +362,24 @@ app.post('/labels', async (req, res) => {
         }
       }
 
-      // Generate Code 128 barcode using bwip-js - optimized for clarity
+      // Generate Code 128 barcode using bwip-js - optimized for 40x20mm
       const barcodeOptions = {
         bcid: 'code128',        // Barcode type
         text: String(internalID), // Text to encode
-        scale: 2,               // Increased scale for better clarity
-        height: 14,             // Increased height for better scanning
+        scale: 1,               // Reduced scale for smaller label
+        height: 8,              // Reduced height for smaller label
         includetext: false,     // Don't include text below barcode
         textxalign: 'center' as const,   // Center text if included
-        quietzones: true,       // Include quiet zones (2-3mm as requested)
-        quietzone: 3,           // Increased quiet zone for better scanning
-        width: 2                // Wider bars for better clarity
+        quietzones: true,       // Include quiet zones
+        quietzone: 2,           // Reduced quiet zone for smaller label
+        width: 1                // Thinner bars for smaller label
       };
 
       const barcodeBuffer = await bwipjs.toBuffer(barcodeOptions);
 
-      // Truncate title and author for 80mm width (optimized for readability)
-      const maxTitleLength = 30; // Optimized for 80mm width
-      const maxAuthorLength = 25; // Shorter for author line
+      // Truncate title and author for 40mm width (optimized for readability)
+      const maxTitleLength = 15; // Optimized for 40mm width
+      const maxAuthorLength = 12; // Shorter for author line
       const truncatedTitle = displayTitle.length > maxTitleLength 
         ? displayTitle.substring(0, maxTitleLength) + '...' 
         : displayTitle;
@@ -391,36 +391,36 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top (left-aligned)
+      // 1. TITLE at the top (left-aligned, bold, 8pt font)
       doc.fontSize(8)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(truncatedTitle, 6, 5, { 
-           width: widthPoints - 12, 
+         .text(truncatedTitle, 3, 2, { 
+           width: widthPoints - 6, 
            align: 'left',
            lineGap: 0.5
          });
 
-      // 2. AUTHOR just under title (left-aligned)
+      // 2. AUTHOR just under title (left-aligned, 7pt font)
       doc.fontSize(7)
          .font('Helvetica')
          .fillColor('#333333')
-         .text(truncatedAuthor, 6, 18, { 
-           width: widthPoints - 12, 
+         .text(truncatedAuthor, 3, 9, { 
+           width: widthPoints - 6, 
            align: 'left' 
          });
 
       // 3. INTERNAL ID (left-aligned and bold)
-      doc.fontSize(8)
+      doc.fontSize(6)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`ID: ${internalID}`, 6, 30, { width: widthPoints - 12, align: 'left' });
+         .text(`ID: ${internalID}`, 3, 15, { width: widthPoints - 6, align: 'left' });
 
-      // 4. BARCODE (Code 128 of internal ID) - perfectly centered between ID and Intake Date
-      const barcodeWidth = Math.min(widthPoints - 16, 140); // Increased width for clarity
-      const barcodeHeight = 16; // Increased height for better scanning
+      // 4. BARCODE (Code 128 of internal ID) - perfectly centered
+      const barcodeWidth = Math.min(widthPoints - 8, 70); // Reduced width for smaller label
+      const barcodeHeight = 8; // Reduced height for smaller label
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 45; // Centered between ID (30) and Intake Date (heightPoints - 15)
+      const barcodeY = 22; // Centered in available space
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
@@ -435,30 +435,30 @@ app.post('/labels', async (req, res) => {
         year: '2-digit' 
       });
       
-      doc.fontSize(6)
+      doc.fontSize(4)
          .font('Helvetica')
          .fillColor('#666666')
-         .text(`Intake: ${intakeDate}`, 6, heightPoints - 15, { 
-           width: widthPoints - 12, 
+         .text(`Intake: ${intakeDate}`, 3, heightPoints - 8, { 
+           width: widthPoints - 6, 
            align: 'left' 
          });
 
-      // MERCANIA branding at the bottom (centered)
-      doc.fontSize(6)
+      // MERCANIA branding at the bottom (centered, bold)
+      doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#1f2937')
-         .text('MERCANIA', 6, heightPoints - 10, { 
-           width: widthPoints - 12, 
+         .text('MERCANIA', 3, heightPoints - 4, { 
+           width: widthPoints - 6, 
            align: 'center' 
          });
 
       // Copy index if multiple copies
       if (quantity > 1) {
-        doc.fontSize(5)
+        doc.fontSize(3)
            .font('Helvetica-Bold')
            .fillColor('#dc2626')
-           .text(`COPY ${copyIndexValue + i + 1}`, 6, heightPoints - 6, { 
-             width: widthPoints - 12, 
+           .text(`COPY ${copyIndexValue + i + 1}`, 3, heightPoints - 3, { 
+             width: widthPoints - 6, 
              align: 'right' 
            });
       }
