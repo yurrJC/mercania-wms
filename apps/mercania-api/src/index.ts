@@ -391,8 +391,8 @@ app.post('/labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // 1. TITLE at the top (left-aligned, bold, largest font)
-      doc.fontSize(8)
+      // 1. TITLE at the top (left-aligned, bold, scaled down)
+      doc.fontSize(6)
          .font('Helvetica-Bold')
          .fillColor('#000000')
          .text(truncatedTitle, 2, 2, { 
@@ -402,25 +402,25 @@ app.post('/labels', async (req, res) => {
          });
 
       // 2. AUTHOR just under title (left-aligned, smaller than title)
-      doc.fontSize(6)
+      doc.fontSize(5)
          .font('Helvetica')
          .fillColor('#333333')
-         .text(truncatedAuthor, 2, 10, { 
+         .text(truncatedAuthor, 2, 9, { 
            width: widthPoints - 4, 
            align: 'left' 
          });
 
-      // 3. INTERNAL ID (left-aligned and bold, same size as author)
-      doc.fontSize(6)
+      // 3. INTERNAL ID (left-aligned and bold, smaller than author)
+      doc.fontSize(4)
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`ID: ${internalID}`, 2, 17, { width: widthPoints - 4, align: 'left' });
+         .text(`ID: ${internalID}`, 2, 15, { width: widthPoints - 4, align: 'left' });
 
-      // 4. BARCODE (Code 128 of internal ID) - perfectly centered, moved down
+      // 4. BARCODE (Code 128 of internal ID) - perfectly centered, adjusted for smaller text
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Good width for 40mm
       const barcodeHeight = 8; // Slightly smaller to fit better
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 30; // Moved down a bit for better spacing
+      const barcodeY = 22; // Adjusted for smaller text above
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
