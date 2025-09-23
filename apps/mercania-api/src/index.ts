@@ -570,27 +570,18 @@ app.post('/lot-labels', async (req, res) => {
            align: 'left' 
          });
 
-      // 3. BARCODE (Code 128 of lot number) - centered, matching item label structure
+      // 3. BARCODE (Code 128 of lot number) - centered, moved down 10px
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Matching item label width
       const barcodeHeight = 8; // Matching item label height
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 18; // Moved up from Y=40 to Y=18 for smaller label
+      const barcodeY = 28; // Moved down 10px from Y=18 to Y=28
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
         height: barcodeHeight 
       });
 
-      // 4. MERCANIA branding at the bottom (centered, scaled down)
-      doc.fontSize(3) // Scaled down from 6pt to 3pt
-         .font('Helvetica-Bold')
-         .fillColor('#1f2937')
-         .text('MERCANIA', 1, heightPoints - 6, { // Moved to X=1, adjusted Y position
-           width: widthPoints - 2, // Adjusted width
-           align: 'center' 
-         });
-
-      // 5. DATE at the very bottom (left-aligned, scaled down)
+      // 4. DATE on first page (left-aligned, scaled down) - moved up from bottom
       const now = new Date();
       const lotDate = now.toLocaleDateString('en-US', { 
         month: '2-digit', 
@@ -601,9 +592,18 @@ app.post('/lot-labels', async (req, res) => {
       doc.fontSize(3) // Scaled down from 5pt to 3pt
          .font('Helvetica')
          .fillColor('#666666')
-         .text(lotDate, 4, heightPoints - 3, { // Moved right to X=4, adjusted Y position
+         .text(lotDate, 4, 38, { // Moved up to Y=38 to fit on first page
            width: widthPoints - 8, // Adjusted width
            align: 'left' 
+         });
+
+      // 5. MERCANIA branding at the bottom (centered, scaled down)
+      doc.fontSize(3) // Scaled down from 6pt to 3pt
+         .font('Helvetica-Bold')
+         .fillColor('#1f2937')
+         .text('MERCANIA', 1, heightPoints - 6, { // Moved to X=1, adjusted Y position
+           width: widthPoints - 2, // Adjusted width
+           align: 'center' 
          });
 
       // Copy index if multiple copies
