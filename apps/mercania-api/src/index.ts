@@ -491,27 +491,27 @@ app.post('/lot-labels', async (req, res) => {
       return;
     }
 
-    // Set defaults - force 80x40mm for lot labels
+    // Set defaults - force 40x20mm for lot labels (matching item labels)
     const quantity = qty || 1;
     const displayLotNumber = lotNumber.toString();
     const displayItemCount = itemCount || 0;
 
-    // Parse label size (80x40mm)
-    const widthMm = 80;
-    const heightMm = 40;
+    // Parse label size (40x20mm)
+    const widthMm = 40;
+    const heightMm = 20;
     
     // Convert mm to points (1mm = 2.834645669 points)
-    const widthPoints = widthMm * 2.834645669;  // 226.77 points
-    const heightPoints = heightMm * 2.834645669; // 113.39 points
+    const widthPoints = widthMm * 2.834645669;  // 113.39 points
+    const heightPoints = heightMm * 2.834645669; // 56.69 points
     
-    // Create PDF document with proper MediaBox and CropBox for 80x40mm
+    // Create PDF document with proper MediaBox and CropBox for 40x20mm
     const doc = new PDFDocument({ 
       size: [widthPoints, heightPoints],
       margin: 0,
       layout: 'portrait'
     });
     
-    // Set MediaBox and CropBox to exact 80x40mm dimensions
+    // Set MediaBox and CropBox to exact 40x20mm dimensions
     if (doc.page) {
       (doc.page as any).mediaBox = [0, 0, widthPoints, heightPoints];
       (doc.page as any).cropBox = [0, 0, widthPoints, heightPoints];
@@ -535,7 +535,7 @@ app.post('/lot-labels', async (req, res) => {
         doc.addPage();
       }
 
-      // Background - exact 80mm x 40mm dimensions
+      // Background - exact 40mm x 20mm dimensions
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
@@ -552,21 +552,21 @@ app.post('/lot-labels', async (req, res) => {
       // Convert canvas to buffer
       const barcodeBuffer = canvas.toBuffer('image/png');
 
-      // 1. LOT NUMBER at the top (left-aligned)
-      doc.fontSize(10)
+      // 1. LOT NUMBER at the top (left-aligned, scaled down for 40x20mm)
+      doc.fontSize(5) // Scaled down from 10pt to 5pt
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`LOT #${displayLotNumber}`, 6, 8, { 
-           width: widthPoints - 12, 
+         .text(`LOT #${displayLotNumber}`, 4, 3, { // Moved right to X=4, moved up to Y=3
+           width: widthPoints - 8, // Adjusted width
            align: 'left' 
          });
 
-      // 2. ITEM COUNT below lot number (left-aligned)
-      doc.fontSize(8)
+      // 2. ITEM COUNT below lot number (left-aligned, scaled down)
+      doc.fontSize(4) // Scaled down from 8pt to 4pt
          .font('Helvetica')
          .fillColor('#333333')
-         .text(`Items: ${displayItemCount}`, 6, 25, { 
-           width: widthPoints - 12, 
+         .text(`Items: ${displayItemCount}`, 4, 10, { // Moved right to X=4, moved up to Y=10
+           width: widthPoints - 8, // Adjusted width
            align: 'left' 
          });
 
@@ -574,23 +574,23 @@ app.post('/lot-labels', async (req, res) => {
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Matching item label width
       const barcodeHeight = 8; // Matching item label height
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 40; // Keep same position for lot labels
+      const barcodeY = 18; // Moved up from Y=40 to Y=18 for smaller label
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
         height: barcodeHeight 
       });
 
-      // 4. MERCANIA branding at the bottom (centered)
-      doc.fontSize(6)
+      // 4. MERCANIA branding at the bottom (centered, scaled down)
+      doc.fontSize(3) // Scaled down from 6pt to 3pt
          .font('Helvetica-Bold')
          .fillColor('#1f2937')
-         .text('MERCANIA', 6, heightPoints - 15, { 
-           width: widthPoints - 12, 
+         .text('MERCANIA', 1, heightPoints - 6, { // Moved to X=1, adjusted Y position
+           width: widthPoints - 2, // Adjusted width
            align: 'center' 
          });
 
-      // 5. DATE at the very bottom (left-aligned)
+      // 5. DATE at the very bottom (left-aligned, scaled down)
       const now = new Date();
       const lotDate = now.toLocaleDateString('en-US', { 
         month: '2-digit', 
@@ -598,21 +598,21 @@ app.post('/lot-labels', async (req, res) => {
         year: '2-digit' 
       });
       
-      doc.fontSize(5)
+      doc.fontSize(3) // Scaled down from 5pt to 3pt
          .font('Helvetica')
          .fillColor('#666666')
-         .text(lotDate, 6, heightPoints - 8, { 
-           width: widthPoints - 12, 
+         .text(lotDate, 4, heightPoints - 3, { // Moved right to X=4, adjusted Y position
+           width: widthPoints - 8, // Adjusted width
            align: 'left' 
          });
 
       // Copy index if multiple copies
       if (quantity > 1) {
-        doc.fontSize(5)
+        doc.fontSize(2) // Scaled down from 5pt to 2pt
            .font('Helvetica-Bold')
            .fillColor('#dc2626')
-           .text(`COPY ${i + 1}`, 6, heightPoints - 4, { 
-             width: widthPoints - 12, 
+           .text(`COPY ${i + 1}`, 4, heightPoints - 1, { // Moved right to X=4, adjusted Y position
+             width: widthPoints - 8, // Adjusted width
              align: 'right' 
            });
       }
