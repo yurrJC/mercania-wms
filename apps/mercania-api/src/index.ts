@@ -570,11 +570,11 @@ app.post('/lot-labels', async (req, res) => {
            align: 'left' 
          });
 
-      // 3. BARCODE (Code 128 of lot number) - centered, moved down 10px
+      // 3. BARCODE (Code 128 of lot number) - centered, moved up 4px
       const barcodeWidth = Math.min(widthPoints - 4, 70); // Matching item label width
       const barcodeHeight = 8; // Matching item label height
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 28; // Moved down 10px from Y=18 to Y=28
+      const barcodeY = 24; // Moved up 4px from Y=28 to Y=24
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
