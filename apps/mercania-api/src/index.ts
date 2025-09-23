@@ -539,12 +539,12 @@ app.post('/lot-labels', async (req, res) => {
       doc.rect(0, 0, widthPoints, heightPoints)
          .fill('#ffffff');
 
-      // Generate Code 128 barcode for lot number
+      // Generate Code 128 barcode for lot number - matching item label structure
       const canvas = createCanvas(200, 30);
-      JsBarcode(canvas, `LOT${displayLotNumber}`, {
+      JsBarcode(canvas, displayLotNumber, { // Removed LOT prefix
         format: "CODE128",
-        width: 2,
-        height: 25,
+        width: 1.5, // Reduced from 2 to match item labels
+        height: 8,  // Reduced from 25 to match item labels
         displayValue: false,
         margin: 0
       });
@@ -570,11 +570,11 @@ app.post('/lot-labels', async (req, res) => {
            align: 'left' 
          });
 
-      // 3. BARCODE (Code 128 of lot number) - centered
-      const barcodeWidth = Math.min(widthPoints - 16, 140);
-      const barcodeHeight = 16;
+      // 3. BARCODE (Code 128 of lot number) - centered, matching item label structure
+      const barcodeWidth = Math.min(widthPoints - 4, 70); // Matching item label width
+      const barcodeHeight = 8; // Matching item label height
       const barcodeX = (widthPoints - barcodeWidth) / 2;
-      const barcodeY = 40;
+      const barcodeY = 40; // Keep same position for lot labels
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, { 
         width: barcodeWidth, 
