@@ -1214,7 +1214,7 @@ export default function InventoryPage() {
           <>
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="w-full">
-                <table className="w-full table-auto divide-y divide-gray-200">
+                <table className="w-full table-fixed divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="w-20 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1258,11 +1258,11 @@ export default function InventoryPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {inventoryData.items.map((item) => (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <td className="px-4 py-3 whitespace-nowrap text-center w-20">
                           <div className="text-sm font-bold text-gray-900">#{item.id}</div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-start space-x-3">
+                        <td className="px-4 py-3 w-80">
+                          <div className="flex items-start space-x-3 w-full">
                             <div className="flex-shrink-0">
                               {item.isbnMaster?.imageUrl ? (
                                 <img 
@@ -1290,20 +1290,20 @@ export default function InventoryPage() {
                                 </div>
                               )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                              <p className="text-sm font-medium text-gray-900 truncate" title={formatItemTitle(item)}>
                                 {formatItemTitle(item)}
                               </p>
-                              <p className="text-sm text-gray-500 truncate">
+                              <p className="text-sm text-gray-500 truncate" title={formatItemAuthor(item)}>
                                 {formatItemAuthor(item)}
                               </p>
-                              <p className="text-xs text-gray-400">
+                              <p className="text-xs text-gray-400 truncate" title={`ISBN: ${item.isbn}`}>
                                 ISBN: {item.isbn}
                               </p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap w-28">
                           <div className="text-xs font-medium text-gray-900">
                             {item.conditionGrade || 'Not Set'}
                           </div>
@@ -1313,47 +1313,47 @@ export default function InventoryPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap w-32">
                           <div className="inline-flex items-center font-mono text-sm font-semibold text-gray-800 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
                             <span className="tracking-wide">{generateSKU(item)}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <td className="px-4 py-3 whitespace-nowrap text-center w-24">
                           <span className={`inline-flex px-1 py-1 text-xs font-semibold rounded ${getStatusColor(item.currentStatus)}`}>
                             {item.currentStatus.slice(0,3)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900 w-28">
                           {item.currentLocation ? (
                             item.currentLocation
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900 w-20">
                           {item.lotNumber ? (
                             <span className="bg-purple-100 text-purple-800 px-1 py-1 rounded text-xs font-semibold">#{item.lotNumber}</span>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-900 w-24">
                             {formatCurrency(item.costCents)}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500 w-28">
                             {formatDate(item.intakeDate)}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500 w-28">
                           {item.listedDate ? formatDate(item.listedDate) : (
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500">
+                        <td className="px-4 py-3 whitespace-nowrap text-center text-xs text-gray-500 w-28">
                           {item.soldDate ? formatDate(item.soldDate) : (
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-medium">
+                        <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-medium w-28">
                           <div className="flex items-center justify-end space-x-1">
                           <button
                               onClick={() => handleViewItem(item)}
