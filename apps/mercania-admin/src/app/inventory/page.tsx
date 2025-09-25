@@ -86,6 +86,7 @@ export default function InventoryPage() {
 
   // Clipboard functionality
   const { copySuccess, copyToClipboard } = useClipboard();
+  const [copiedItemId, setCopiedItemId] = useState<number | null>(null);
 
   // Helper function to format DVD title with season info
   const formatItemTitle = (item: Item): string => {
@@ -125,8 +126,13 @@ export default function InventoryPage() {
   };
 
   // Handle SKU copy to clipboard
-  const handleCopySKU = async (sku: string) => {
-    await copyToClipboard(sku, 'barcode');
+  const handleCopySKU = async (sku: string, itemId: number) => {
+    const success = await copyToClipboard(sku, 'barcode');
+    if (success) {
+      setCopiedItemId(itemId);
+      // Clear the copied item ID after 2 seconds
+      setTimeout(() => setCopiedItemId(null), 2000);
+    }
   };
 
   const [showLotModal, setShowLotModal] = useState(false);
@@ -1325,12 +1331,12 @@ export default function InventoryPage() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap w-32">
                           <button
-                            onClick={() => handleCopySKU(generateSKU(item))}
+                            onClick={() => handleCopySKU(generateSKU(item), item.id)}
                             className="inline-flex items-center font-mono text-sm font-semibold text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm transition-colors duration-200 cursor-pointer group"
                             title="Click to copy SKU"
                           >
                             <span className="tracking-wide">{generateSKU(item)}</span>
-                            {copySuccess === 'barcode' && (
+                            {copiedItemId === item.id && (
                               <CheckCircle className="ml-2 h-4 w-4 text-green-600" />
                             )}
                           </button>
