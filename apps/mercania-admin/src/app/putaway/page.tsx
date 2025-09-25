@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { apiCall } from '../../utils/api';
+import { useSound } from '../../hooks/useSound';
 import { 
   ArrowLeft,
   Scan,
@@ -55,6 +56,9 @@ export default function PutawayPage() {
   const internalIdInputRef = useRef<HTMLInputElement>(null);
   const lotInputRef = useRef<HTMLInputElement>(null);
   const locationInputRef = useRef<HTMLInputElement>(null);
+
+  // Sound effects
+  const { playSuccessSound, playLocationSuccessSound, playErrorSound } = useSound();
 
   // Focus management
   useEffect(() => {
@@ -143,10 +147,16 @@ export default function PutawayPage() {
       setCurrentItem(item);
       setAwaitingLocation(true);
       setSuccess(`📦 Found FIRST COPY: ${item.isbnMaster?.title || 'Unknown Title'} (ID: ${item.id})`);
+      
+      // Play success sound
+      playSuccessSound();
 
     } catch (err) {
       console.error('Barcode lookup error:', err);
       setError(err instanceof Error ? err.message : 'Failed to lookup item by barcode');
+      
+      // Play error sound
+      playErrorSound();
     } finally {
       setIsLoading(false);
     }
@@ -181,10 +191,16 @@ export default function PutawayPage() {
       setCurrentItem(item);
       setAwaitingLocation(true);
       setSuccess(`🎯 Found SPECIFIC COPY: ${item.isbnMaster?.title || 'Unknown Title'} (ID: ${item.id})`);
+      
+      // Play success sound
+      playSuccessSound();
 
     } catch (err) {
       console.error('Internal ID lookup error:', err);
       setError(err instanceof Error ? err.message : 'Failed to lookup item by internal ID');
+      
+      // Play error sound
+      playErrorSound();
     } finally {
       setIsLoading(false);
     }
@@ -244,10 +260,16 @@ export default function PutawayPage() {
       });
       setAwaitingLocation(true);
       setSuccess(`Lot #${lotNumber} found: ${result.data.items.length} items`);
+      
+      // Play success sound
+      playSuccessSound();
 
     } catch (err) {
       console.error('Lot lookup error:', err);
       setError(err instanceof Error ? err.message : 'Failed to lookup lot');
+      
+      // Play error sound
+      playErrorSound();
     } finally {
       setIsLoading(false);
     }
@@ -289,6 +311,9 @@ export default function PutawayPage() {
           ? ` (Status: INTAKE → STORED)`
           : '';
         setSuccess(`✅ Item #${currentItem.id} assigned to ${location.toUpperCase()}${statusMessage}`);
+        
+        // Play location success sound
+        playLocationSuccessSound();
 
       } else if (mode === 'lot' && currentLot) {
         // Update all items in lot
@@ -321,6 +346,9 @@ export default function PutawayPage() {
           ? ` (${intakeItems.length} items: INTAKE → STORED)`
           : '';
         setSuccess(`✅ Lot #${currentLot.lotNumber} (${currentLot.items.length} items) assigned to ${location.toUpperCase()}${statusMessage}`);
+        
+        // Play location success sound
+        playLocationSuccessSound();
       }
 
       // Reset for next scan
@@ -329,6 +357,9 @@ export default function PutawayPage() {
     } catch (err) {
       console.error('Location assignment error:', err);
       setError(err instanceof Error ? err.message : 'Failed to assign location');
+      
+      // Play error sound
+      playErrorSound();
     } finally {
       setIsLoading(false);
     }
