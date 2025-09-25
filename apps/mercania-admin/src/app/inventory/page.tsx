@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { apiCall } from '../../utils/api';
+import { useClipboard } from '../../hooks/useClipboard';
 import { 
   Package,
   Search,
@@ -83,6 +84,9 @@ export default function InventoryPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Item | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Clipboard functionality
+  const { copySuccess, copyToClipboard } = useClipboard();
+
   // Helper function to format DVD title with season info
   const formatItemTitle = (item: Item): string => {
     const baseTitle = item.isbnMaster?.title || 'Unknown Title';
@@ -119,6 +123,12 @@ export default function InventoryPage() {
     // For other items, show author/artist
     return item.isbnMaster?.author || 'Unknown Author';
   };
+
+  // Handle SKU copy to clipboard
+  const handleCopySKU = async (sku: string) => {
+    await copyToClipboard(sku, 'barcode');
+  };
+
   const [showLotModal, setShowLotModal] = useState(false);
   const [lotItems, setLotItems] = useState<Item[]>([]);
   const [lotSearchTerm, setLotSearchTerm] = useState('');
@@ -1314,9 +1324,16 @@ export default function InventoryPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap w-32">
-                          <div className="inline-flex items-center font-mono text-sm font-semibold text-gray-800 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                          <button
+                            onClick={() => handleCopySKU(generateSKU(item))}
+                            className="inline-flex items-center font-mono text-sm font-semibold text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm transition-colors duration-200 cursor-pointer group"
+                            title="Click to copy SKU"
+                          >
                             <span className="tracking-wide">{generateSKU(item)}</span>
-                          </div>
+                            {copySuccess === 'barcode' && (
+                              <CheckCircle className="ml-2 h-4 w-4 text-green-600" />
+                            )}
+                          </button>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-center w-24">
                           <span className={`inline-flex px-1 py-1 text-xs font-semibold rounded ${getStatusColor(item.currentStatus)}`}>
