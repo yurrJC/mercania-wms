@@ -47,6 +47,14 @@ export default function ListingHelperPage() {
       if (itemData) {
         // Auto-copy SKU to clipboard
         await copyToClipboard(itemData.sku, 'barcode');
+        // Clear the input field for next search
+        setBarcodeInput('');
+        // Focus back on barcode input for next scan
+        setTimeout(() => {
+          if (barcodeInputRef.current) {
+            barcodeInputRef.current.focus();
+          }
+        }, 100);
       }
     } catch (error) {
       // Error handling is done in the hook
@@ -59,6 +67,14 @@ export default function ListingHelperPage() {
       if (itemData) {
         // Auto-copy SKU to clipboard
         await copyToClipboard(itemData.sku, 'id');
+        // Clear the input field for next search
+        setInternalIdInput('');
+        // Focus back on internal ID input for next scan
+        setTimeout(() => {
+          if (idInputRef.current) {
+            idInputRef.current.focus();
+          }
+        }, 100);
       }
     } catch (error) {
       // Error handling is done in the hook

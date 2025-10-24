@@ -51,6 +51,7 @@ export default function PutawayPage() {
   const [success, setSuccess] = useState('');
   const [sessions, setSessions] = useState<PutawaySession[]>([]);
   const [awaitingLocation, setAwaitingLocation] = useState(false);
+  const [lastUsedInputMethod, setLastUsedInputMethod] = useState<'barcode' | 'internalId'>('barcode');
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const internalIdInputRef = useRef<HTMLInputElement>(null);
@@ -62,14 +63,18 @@ export default function PutawayPage() {
 
   // Focus management
   useEffect(() => {
-    if (mode === 'item' && barcodeInputRef.current && !awaitingLocation) {
-      barcodeInputRef.current.focus();
+    if (mode === 'item' && !awaitingLocation) {
+      if (lastUsedInputMethod === 'barcode' && barcodeInputRef.current) {
+        barcodeInputRef.current.focus();
+      } else if (lastUsedInputMethod === 'internalId' && internalIdInputRef.current) {
+        internalIdInputRef.current.focus();
+      }
     } else if (mode === 'lot' && lotInputRef.current) {
       lotInputRef.current.focus();
     } else if (awaitingLocation && locationInputRef.current) {
       locationInputRef.current.focus();
     }
-  }, [mode, awaitingLocation]);
+  }, [mode, awaitingLocation, lastUsedInputMethod]);
 
   // Handle PDF download
   const handleDownloadPDF = async () => {
@@ -146,6 +151,7 @@ export default function PutawayPage() {
       const item = result.data.items[0];
       setCurrentItem(item);
       setAwaitingLocation(true);
+      setLastUsedInputMethod('barcode');
       setSuccess(`📦 Found FIRST COPY: ${item.isbnMaster?.title || 'Unknown Title'} (ID: ${item.id})`);
       
       // Play success sound
@@ -190,6 +196,7 @@ export default function PutawayPage() {
       const item = result.data.items[0];
       setCurrentItem(item);
       setAwaitingLocation(true);
+      setLastUsedInputMethod('internalId');
       setSuccess(`🎯 Found SPECIFIC COPY: ${item.isbnMaster?.title || 'Unknown Title'} (ID: ${item.id})`);
       
       // Play success sound
@@ -376,10 +383,14 @@ export default function PutawayPage() {
     setAwaitingLocation(false);
     setError('');
 
-    // Refocus on appropriate input
+    // Refocus on appropriate input based on last used method
     setTimeout(() => {
-      if (mode === 'item' && barcodeInputRef.current) {
-        barcodeInputRef.current.focus();
+      if (mode === 'item') {
+        if (lastUsedInputMethod === 'barcode' && barcodeInputRef.current) {
+          barcodeInputRef.current.focus();
+        } else if (lastUsedInputMethod === 'internalId' && internalIdInputRef.current) {
+          internalIdInputRef.current.focus();
+        }
       } else if (mode === 'lot' && lotInputRef.current) {
         lotInputRef.current.focus();
       }
