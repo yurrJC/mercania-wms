@@ -181,6 +181,8 @@ export default function IntakePage() {
       location: string | null;
     }>;
   } | null>(null);
+  const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false); // Track if we should auto-submit after barcode scan
+  const [isManualEntry, setIsManualEntry] = useState(false); // Track if this is a manual entry (no barcode)
   
   const isbnInputRef = useRef<HTMLInputElement>(null);
   const upcInputRef = useRef<HTMLInputElement>(null);
@@ -256,12 +258,129 @@ export default function IntakePage() {
     }
   }, [productType]);
 
+  // Auto-submit when barcode data is found and shouldAutoSubmit is true
+  useEffect(() => {
+    if (shouldAutoSubmit && !isLoading && !isManualEntry) {
+      // Small delay to ensure state is fully updated
+      const timer = setTimeout(() => {
+        if (productType === 'books' && bookData && formData.title.trim()) {
+          // Directly submit without showing edit page
+          const submitBook = async () => {
+            setIsLoading(true);
+            setError('');
+            try {
+              const response = await apiCall('/api/intake', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  ...formData,
+                  costCents: Math.round(formData.costCents * 100),
+                  productType: 'BOOK'
+                }),
+              });
+              
+              if (!response.ok) {
+                throw new Error('Failed to add item to inventory');
+              }
+              
+              const result = await response.json();
+              if (result.success) {
+                setInternalId(result.data.internalId);
+                setDuplicateWarning(result.duplicate || null);
+                setSuccess(true);
+              } else {
+                throw new Error(result.error || 'Failed to add item');
+              }
+            } catch (err) {
+              console.error('Error submitting book:', err);
+              setError(err instanceof Error ? err.message : 'Failed to add item to inventory');
+            } finally {
+              setIsLoading(false);
+              setShouldAutoSubmit(false);
+            }
+          };
+          submitBook();
+        } else if (productType === 'cds' && cdData && cdFormData.title.trim()) {
+          // Directly submit without showing edit page
+          const submitCD = async () => {
+            setIsLoading(true);
+            setError('');
+            try {
+              const response = await apiCall('/api/intake', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  isbn: cdFormData.barcode || '',
+                  title: cdFormData.title,
+                  author: cdFormData.artist,
+                  publisher: cdFormData.label,
+                  pubYear: cdFormData.releaseYear,
+                  binding: cdFormData.format,
+                  imageUrl: cdData?.coverArtUrl || null,
+                  conditionGrade: cdFormData.conditionGrade,
+                  conditionNotes: cdFormData.conditionNotes,
+                  costCents: Math.round((cdFormData.costCents || 0) * 100),
+                  productType: 'CD',
+                  cdMetadata: {
+                    genre: cdFormData.genre || null,
+                    runtime: cdFormData.runtime || null
+                  }
+                }),
+              });
+              
+              if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to add CD to inventory: ${response.status} ${errorText}`);
+              }
+              
+              const result = await response.json();
+              if (result.success) {
+                setInternalId(result.data.internalId);
+                setDuplicateWarning(result.duplicate || null);
+                setSuccess(true);
+              } else {
+                throw new Error(result.error || 'Failed to add CD');
+              }
+            } catch (err) {
+              console.error('Error submitting CD:', err);
+              setError(err instanceof Error ? err.message : 'Failed to add CD to inventory');
+            } finally {
+              setIsLoading(false);
+              setShouldAutoSubmit(false);
+            }
+          };
+          submitCD();
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [shouldAutoSubmit, bookData, cdData, formData, cdFormData, productType, isLoading, isManualEntry]);
+
+  // Auto-advance from success page unless duplicate warning exists
+  useEffect(() => {
+    if (success && internalId && !duplicateWarning?.isDuplicate) {
+      // Auto-reset after a short delay if no duplicate warning
+      const timer = setTimeout(() => {
+        resetForm();
+      }, 1500); // 1.5 second delay to show success message
+
+      return () => clearTimeout(timer);
+    }
+  }, [success, internalId, duplicateWarning]);
+
   // Book functions
   const fetchBookData = async (isbn: string): Promise<void> => {
     setIsLoading(true);
     setError('');
     setBookData(null);
     setDuplicateWarning(null);
+    setShouldAutoSubmit(false); // Reset auto-submit flag
+    setIsManualEntry(false); // This is a barcode scan, not manual entry
     
     try {
       const response = await apiCall(`/api/intake/${isbn}`);
@@ -297,6 +416,10 @@ export default function IntakePage() {
         setDuplicateWarning(result.duplicate);
       }
       
+      // Set auto-submit flag - we'll submit automatically after data is set
+      // This allows skipping the edit information page
+      setShouldAutoSubmit(true);
+      
     } catch (err) {
       console.error('Error fetching book data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch book data');
@@ -308,6 +431,9 @@ export default function IntakePage() {
   // DVD functions
   const handleDVDBarcodeScan = (upc: string): void => {
     // Just populate the UPC field and show the form - no API call needed
+    // DVDs don't have auto-lookup, so always show edit form
+    setIsManualEntry(false); // UPC scanned but still need to edit
+    setShouldAutoSubmit(false); // DVDs always require manual form completion
     setDvdFormData(prev => ({
       ...prev,
       upc: upc,
@@ -377,12 +503,14 @@ export default function IntakePage() {
           setInternalId(result.data.internalId);
           setDuplicateWarning(result.duplicate || null);
           setSuccess(true);
+          setShouldAutoSubmit(false); // Reset auto-submit flag after submission
         } else {
         throw new Error(result.error || 'Failed to add item');
       }
     } catch (err) {
       console.error('Error submitting book:', err);
       setError(err instanceof Error ? err.message : 'Failed to add item to inventory');
+      setShouldAutoSubmit(false); // Reset on error too
     } finally {
       setIsLoading(false);
     }
@@ -546,6 +674,8 @@ export default function IntakePage() {
     setCdData(null);
     setManualEntry(false);
     setCdManualEntry(false);
+    setIsManualEntry(false);
+    setShouldAutoSubmit(false);
     setFormData({
       isbn: '',
       title: '',
@@ -625,6 +755,8 @@ export default function IntakePage() {
 
   const handleBookManualEntry = () => {
     setManualEntry(true);
+    setIsManualEntry(true); // This is manual entry - don't auto-submit
+    setShouldAutoSubmit(false); // Don't auto-submit for manual entries
     setIsbnInput('');
     setBookData({
       isbn: '',
@@ -653,6 +785,8 @@ export default function IntakePage() {
     setError('');
     setCdData(null);
     setDuplicateWarning(null);
+    setShouldAutoSubmit(false); // Reset auto-submit flag
+    setIsManualEntry(false); // This is a barcode scan, not manual entry
     
     // Clean the barcode - remove leading/trailing spaces
     const cleanBarcode = barcode.trim();
@@ -699,6 +833,10 @@ export default function IntakePage() {
         setDuplicateWarning(result.duplicate);
       }
       
+      // Set auto-submit flag - we'll submit automatically after data is set
+      // This allows skipping the edit information page
+      setShouldAutoSubmit(true);
+      
     } catch (err) {
       console.error('Error fetching CD data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch CD data');
@@ -719,6 +857,8 @@ export default function IntakePage() {
 
   const handleCDManualEntry = () => {
     setCdManualEntry(true);
+    setIsManualEntry(true); // This is manual entry - don't auto-submit
+    setShouldAutoSubmit(false); // Don't auto-submit for manual entries
     setBarcodeInput('');
     setCdData({
       barcode: '',
@@ -794,12 +934,14 @@ export default function IntakePage() {
         setInternalId(result.data.internalId);
         setDuplicateWarning(result.duplicate || null);
         setSuccess(true);
+        setShouldAutoSubmit(false); // Reset auto-submit flag after submission
       } else {
         throw new Error(result.error || 'Failed to add CD');
       }
     } catch (err) {
       console.error('Error submitting CD:', err);
       setError(err instanceof Error ? err.message : 'Failed to add CD to inventory');
+      setShouldAutoSubmit(false); // Reset on error too
     } finally {
       setIsLoading(false);
     }
@@ -833,6 +975,7 @@ export default function IntakePage() {
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               {productType === 'books' && 'Book Added Successfully!'}
               {productType === 'dvds' && 'DVD Added Successfully!'}
+              {productType === 'cds' && 'CD Added Successfully!'}
             </h2>
             <p className="text-gray-600 mb-6">
               Internal ID: <span className="font-bold text-2xl text-blue-600">#{internalId}</span>
