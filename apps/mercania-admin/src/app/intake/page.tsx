@@ -361,17 +361,24 @@ export default function IntakePage() {
     }
   }, [shouldAutoSubmit, bookData, cdData, formData, cdFormData, productType, isLoading, isManualEntry]);
 
-  // Auto-advance from success page unless duplicate warning exists
+  // Auto-advance from success page unless duplicate warning exists OR manual entry
   useEffect(() => {
-    if (success && internalId && !duplicateWarning?.isDuplicate) {
-      // Auto-reset after a short delay if no duplicate warning
+    // Don't auto-advance if:
+    // 1. Duplicate warning exists (user needs to see it)
+    // 2. Manual entry was used (user needs to see success and print label)
+    // 3. DVD intake (always requires manual form, so always show success page)
+    const isManualEntryUsed = manualEntry || cdManualEntry;
+    const shouldStayOnSuccess = duplicateWarning?.isDuplicate || isManualEntryUsed || productType === 'dvds';
+    
+    if (success && internalId && !shouldStayOnSuccess) {
+      // Auto-reset after a short delay if no duplicate warning and not manual entry
       const timer = setTimeout(() => {
         resetForm();
       }, 1500); // 1.5 second delay to show success message
 
       return () => clearTimeout(timer);
     }
-  }, [success, internalId, duplicateWarning]);
+  }, [success, internalId, duplicateWarning, manualEntry, cdManualEntry, productType]);
 
   // Book functions
   const fetchBookData = async (isbn: string): Promise<void> => {
