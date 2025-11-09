@@ -774,6 +774,142 @@ router.get('/dashboard-stats', async (req, res) => {
 });
 
 // GET /items/:id - Get item details
+router.get('/latest-nonzero-cost', async (req, res) => {
+  try {
+    const {
+      status,
+      location,
+      isbn,
+      barcode,
+      search,
+      title,
+      lotNumber,
+      sort,
+      limit = '20'
+    } = req.query as Record<string, string | undefined>;
+
+    const limitNum = Math.min(Math.max(parseInt(String(limit)) || 20, 1), 100);
+
+    const buildBaseWhere = (): any => {
+      const where: any = {};
+
+      if (status) {
+        where.currentStatus = status;
+      }
+
+      if (location) {
+        where.currentLocation = location;
+      }
+
+      if (lotNumber) {
+        const lotNum = parseInt(String(lotNumber));
+        if (!isNaN(lotNum) && lotNum > 0) {
+          where.lotNumber = lotNum;
+        }
+      }
+
+      const barcodeValue = barcode || isbn;
+      if (barcodeValue) {
+        const barcodeStr = barcodeValue.trim();
+        if (barcodeStr.length > 0) {
+          where.isbn = {
+            contains: barcodeStr,
+            mode: 'insensitive'
+          };
+        }
+      }
+
+      if (title) {
+        const titleStr = title.trim();
+        if (titleStr.length > 0) {
+          where.isbnMaster = {
+            ...(where.isbnMaster || {}),
+            title: {
+              contains: titleStr,
+              mode: 'insensitive'
+            }
+          };
+        }
+      }
+
+      if (search) {
+        const searchId = parseInt(String(search));
+        if (!isNaN(searchId) && searchId > 0 && searchId < 2147483647) {
+          where.id = searchId;
+        }
+      }
+
+      return where;
+    };
+
+    const baseWhere = buildBaseWhere();
+    const latestWhere = {
+      ...baseWhere,
+      costCents: {
+        gt: 0
+      }
+    };
+
+    const sortParam = (sort || 'id_desc').toString();
+    let orderBy: any[] = [{ id: 'desc' }];
+    let comparisonOperator: 'gt' | 'lt' = 'gt';
+
+    switch (sortParam) {
+      case 'id_asc':
+        orderBy = [{ id: 'asc' }];
+        comparisonOperator = 'lt';
+        break;
+      case 'id_desc':
+      default:
+        orderBy = [{ id: 'desc' }];
+        comparisonOperator = 'gt';
+        break;
+    }
+
+    const latestItem = await prisma.item.findFirst({
+      where: latestWhere,
+      select: {
+        id: true
+      },
+      orderBy
+    });
+
+    if (!latestItem) {
+      return res.json({
+        success: true,
+        data: null
+      });
+    }
+
+    const itemsBefore = await prisma.item.count({
+      where: {
+        ...baseWhere,
+        id: {
+          [comparisonOperator]: latestItem.id
+        }
+      }
+    });
+
+    const page = Math.floor(itemsBefore / limitNum) + 1;
+
+    return res.json({
+      success: true,
+      data: {
+        itemId: latestItem.id,
+        page,
+        itemsBefore,
+        pageSize: limitNum
+      }
+    });
+  } catch (error) {
+    console.error('Latest non-zero cost lookup error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to locate latest non-zero cost item'
+    });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;

@@ -83,6 +83,9 @@ export default function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Item | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isNavigatingToLatestCost, setIsNavigatingToLatestCost] = useState(false);
+  const [pendingHighlightItemId, setPendingHighlightItemId] = useState<number | null>(null);
+  const [highlightItemId, setHighlightItemId] = useState<number | null>(null);
 
   // Clipboard functionality
   const { copySuccess, copyToClipboard } = useClipboard();
@@ -218,6 +221,27 @@ export default function InventoryPage() {
     fetchInventory(currentPage, statusFilter, titleSearch, isbnSearch, idSearch, lotFilter, sortOrder);
   }, [currentPage, statusFilter, sortOrder]);
 
+  useEffect(() => {
+    if (pendingHighlightItemId && inventoryData?.items) {
+      const itemExists = inventoryData.items.some(item => item.id === pendingHighlightItemId);
+      if (itemExists) {
+        setHighlightItemId(pendingHighlightItemId);
+        setPendingHighlightItemId(null);
+      }
+    }
+  }, [pendingHighlightItemId, inventoryData]);
+
+  useEffect(() => {
+    if (highlightItemId !== null) {
+      const rowElement = document.getElementById(`inventory-row-${highlightItemId}`);
+      if (rowElement) {
+        rowElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      const timeout = setTimeout(() => setHighlightItemId(null), 4000);
+      return () => clearTimeout(timeout);
+    }
+  }, [highlightItemId]);
+
   // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -296,6 +320,46 @@ export default function InventoryPage() {
     } catch (err) {
       console.error('Export error:', err);
       setError('Failed to export inventory. Please try again.');
+    }
+  };
+
+  const handleJumpToLatestCost = async () => {
+    setIsNavigatingToLatestCost(true);
+    try {
+      const params = new URLSearchParams();
+      const pageSize = inventoryData?.pagination.limit
+        ? inventoryData.pagination.limit.toString()
+        : '20';
+
+      params.append('limit', pageSize);
+      if (statusFilter) params.append('status', statusFilter);
+      if (lotFilter) params.append('lotNumber', lotFilter);
+      if (sortOrder) params.append('sort', sortOrder);
+      if (titleSearch.trim()) params.append('title', titleSearch.trim());
+      if (isbnSearch.trim()) params.append('isbn', isbnSearch.trim());
+      if (idSearch.trim()) params.append('search', idSearch.trim());
+
+      const response = await apiCall(`/api/items/latest-nonzero-cost?${params.toString()}`);
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to locate latest cost item');
+      }
+
+      if (!result.data) {
+        alert('No items with cost recorded yet.');
+        return;
+      }
+
+      const { page, itemId } = result.data as { page: number; itemId: number };
+
+      setCurrentPage(page);
+      setPendingHighlightItemId(itemId);
+    } catch (err) {
+      console.error('Latest cost navigation error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to locate latest cost item');
+    } finally {
+      setIsNavigatingToLatestCost(false);
     }
   };
 
@@ -961,6 +1025,23 @@ export default function InventoryPage() {
                 COG
               </button>
               <button
+                onClick={handleJumpToLatestCost}
+                disabled={isNavigatingToLatestCost}
+                className="bg-yellow-500 text-white px-5 py-2.5 rounded-lg hover:bg-yellow-600 font-medium transition-colors flex items-center disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isNavigatingToLatestCost ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Locating...
+                  </>
+                ) : (
+                  <>
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Latest Cost
+                  </>
+                )}
+              </button>
+              <button
                 onClick={() => setShowUpdateDatesModal(true)}
                 className="bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 font-medium transition-colors flex items-center"
               >
@@ -1273,7 +1354,11 @@ export default function InventoryPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {inventoryData.items.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
+                      <tr
+                        key={item.id}
+                        id={`inventory-row-${item.id}`}
+                        className={`hover:bg-gray-50 ${highlightItemId === item.id ? 'bg-yellow-50 ring-2 ring-yellow-400' : ''}`}
+                      >
                         <td className="px-4 py-3 whitespace-nowrap text-center w-20">
                           <div className="text-sm font-bold text-gray-900">#{item.id}</div>
                         </td>
