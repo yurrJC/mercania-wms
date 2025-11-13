@@ -152,8 +152,32 @@ app.get('/api/label-zpl', (req, res) => {
   }
 });
 
+// Helper function to get first and last item IDs for a lot
+async function getLotIdRange(lotNumber: number): Promise<{ firstId: number; lastId: number } | null> {
+  try {
+    const items = await prisma.item.findMany({
+      where: { lotNumber: lotNumber },
+      select: { id: true },
+      orderBy: { id: 'asc' }
+    });
+
+    if (items.length === 0) {
+      return null;
+    }
+
+    // Since items are sorted by ID ascending, first is min and last is max
+    const firstId = items[0].id;
+    const lastId = items[items.length - 1].id;
+
+    return { firstId, lastId };
+  } catch (error) {
+    console.error('Error getting lot ID range:', error);
+    return null;
+  }
+}
+
 // Generate ZPL label for lot printing
-app.get('/api/lot-label-zpl', (req, res) => {
+app.get('/api/lot-label-zpl', async (req, res) => {
   try {
     const { lotNumber, itemCount } = req.query;
     
@@ -162,10 +186,28 @@ app.get('/api/lot-label-zpl', (req, res) => {
       return;
     }
 
+    const lotNum = parseInt(lotNumber as string);
+    if (isNaN(lotNum)) {
+      res.status(400).json({ error: 'Invalid lot number' });
+      return;
+    }
+
+    // Get first and last item IDs for the lot
+    const idRange = await getLotIdRange(lotNum);
+    let displayText = `LOT #${lotNumber}`;
+    
+    if (idRange) {
+      if (idRange.firstId === idRange.lastId) {
+        displayText = `LOT #${idRange.firstId}`;
+      } else {
+        displayText = `LOT #${idRange.firstId}-${idRange.lastId}`;
+      }
+    }
+
     // Generate ZPL code for 80mm x 40mm lot label
     const zpl = `^XA
 ^CF0,20
-^FO10,10^FDLOT #${lotNumber}^FS
+^FO10,10^FD${displayText}^FS
 ^CF0,15
 ^FO10,35^FDItems: ${itemCount || '0'}^FS
 ^BY2,3,50
@@ -491,9 +533,27 @@ app.post('/lot-labels', async (req, res) => {
       return;
     }
 
+    const lotNum = parseInt(lotNumber.toString());
+    if (isNaN(lotNum)) {
+      res.status(400).json({ error: 'Invalid lot number' });
+      return;
+    }
+
+    // Get first and last item IDs for the lot
+    const idRange = await getLotIdRange(lotNum);
+    let displayLotText = `LOT #${lotNumber}`;
+    
+    if (idRange) {
+      if (idRange.firstId === idRange.lastId) {
+        displayLotText = `LOT #${idRange.firstId}`;
+      } else {
+        displayLotText = `LOT #${idRange.firstId}-${idRange.lastId}`;
+      }
+    }
+
     // Set defaults - force 40x20mm for lot labels (matching item labels)
     const quantity = qty || 1;
-    const displayLotNumber = lotNumber.toString();
+    const displayLotNumber = lotNumber.toString(); // Keep original for barcode
     const displayItemCount = itemCount || 0;
 
     // Parse label size (40x20mm)
@@ -553,10 +613,11 @@ app.post('/lot-labels', async (req, res) => {
       const barcodeBuffer = canvas.toBuffer('image/png');
 
       // 1. LOT NUMBER at the top (left-aligned, scaled down for 40x20mm)
+      // Use first-last ID range instead of lot number
       doc.fontSize(5) // Scaled down from 10pt to 5pt
          .font('Helvetica-Bold')
          .fillColor('#000000')
-         .text(`LOT #${displayLotNumber}`, 4, 3, { // Moved right to X=4, moved up to Y=3
+         .text(displayLotText, 4, 3, { // Moved right to X=4, moved up to Y=3
            width: widthPoints - 8, // Adjusted width
            align: 'left' 
          });
@@ -736,12 +797,32 @@ app.post('/api/print-lot-label', async (req, res) => {
       return;
     }
 
+    const lotNum = parseInt(lotNumber.toString());
+    if (isNaN(lotNum)) {
+      res.status(400).json({ error: 'Invalid lot number' });
+      return;
+    }
+
+    // Get first and last item IDs for the lot
+    const idRange = await getLotIdRange(lotNum);
+    let displayLotText = `LOT #${lotNumber}`;
+    
+    if (idRange) {
+      if (idRange.firstId === idRange.lastId) {
+        displayLotText = `LOT #${idRange.firstId}`;
+      } else {
+        displayLotText = `LOT #${idRange.firstId}-${idRange.lastId}`;
+      }
+    }
+
     // Read the ZPL template
     const templatePath = path.join(process.cwd(), '..', '..', 'zpl', 'mercania_lot_label.zpl');
     let zplTemplate = fs.readFileSync(templatePath, 'utf8');
     
     // Replace placeholders with actual values
-    zplTemplate = zplTemplate.replace(/{LOT_NUMBER}/g, String(lotNumber));
+    // Use ID range for display text, but keep lot number for barcode
+    zplTemplate = zplTemplate.replace(/{LOT_DISPLAY}/g, displayLotText);
+    zplTemplate = zplTemplate.replace(/{LOT_NUMBER}/g, String(lotNumber)); // Keep lot number for barcode
     zplTemplate = zplTemplate.replace(/{ITEM_COUNT}/g, String(itemCount || '0'));
     
     // Create temporary file for ZPL

@@ -147,6 +147,9 @@ export default function InventoryPage() {
   const [editingLot, setEditingLot] = useState<any>(null);
   const [isLoadingLots, setIsLoadingLots] = useState(false);
   const [isDeletingLot, setIsDeletingLot] = useState<number | null>(null);
+  const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
+  const [itemsToAdd, setItemsToAdd] = useState<Item[]>([]);
+  const [isAddingItems, setIsAddingItems] = useState(false);
   
   // Lot pagination state
   const [lotCurrentPage, setLotCurrentPage] = useState(1);
@@ -724,6 +727,136 @@ export default function InventoryPage() {
     } catch (err) {
       console.error('Remove item from lot error:', err);
       setError('Failed to remove item from lot');
+    }
+  };
+
+  // Handle searching for items to add to existing lot
+  const handleAddItemSearch = async (searchTerm: string) => {
+    if (!searchTerm.trim()) return;
+
+    try {
+      const trimmedSearch = searchTerm.trim();
+      const isNumeric = /^\d+$/.test(trimmedSearch);
+      
+      let url;
+      if (isNumeric && trimmedSearch.length <= 6) {
+        // It's a short number (ID)
+        url = `/api/items?search=${trimmedSearch}`;
+      } else {
+        // It's an ISBN/barcode
+        url = `/api/items?isbn=${trimmedSearch}`;
+      }
+
+      const response = await apiCall(url);
+      const result = await response.json();
+      
+      if (result.success && result.data.items.length > 0) {
+        const item = result.data.items[0]; // Take the first item
+        
+        // Check if item is already in the lot
+        if (editingLot && editingLot.items.some((lotItem: Item) => lotItem.id === item.id)) {
+          setError('Item is already in this lot');
+          return;
+        }
+
+        // Check if item is already in itemsToAdd
+        if (itemsToAdd.find(lotItem => lotItem.id === item.id)) {
+          setError('Item is already in the list to add');
+          return;
+        }
+
+        // Check if item is already in another lot
+        if (item.lotNumber !== null) {
+          setError(`Item is already in lot #${item.lotNumber}`);
+          return;
+        }
+
+        setItemsToAdd(prev => [...prev, item]);
+        setAddItemSearchTerm(''); // Clear the search after successful scan
+        setError(''); // Clear any previous errors
+      } else {
+        setError('Item not found');
+      }
+    } catch (err) {
+      console.error('Add item search error:', err);
+      setError('Failed to search for item');
+    }
+  };
+
+  // Remove item from items to add list
+  const handleRemoveFromItemsToAdd = (itemId: number) => {
+    setItemsToAdd(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  // Add items to existing lot
+  const handleAddItemsToLot = async (lotNumber: number) => {
+    if (itemsToAdd.length === 0) {
+      setError('No items to add');
+      return;
+    }
+
+    setIsAddingItems(true);
+    setError('');
+
+    try {
+      const itemIds = itemsToAdd.map(item => item.id);
+      
+      const response = await apiCall(`/api/lots/${lotNumber}/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ itemIds }),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        setError(errorResult.error || `Failed to add items to lot (${response.status})`);
+        return;
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Refresh the lot data to show newly added items
+        const lotResponse = await apiCall(`/api/lots/${lotNumber}`);
+        const lotResult = await lotResponse.json();
+        
+        if (lotResult.success) {
+          setEditingLot({
+            ...lotResult.data,
+            createdAt: editingLot?.createdAt || new Date().toISOString()
+          });
+        }
+
+        // Clear the items to add list
+        setItemsToAdd([]);
+        setAddItemSearchTerm('');
+
+        // Refresh lots list for accurate counts
+        await fetchAllLots();
+
+        // Update inventory data if any of the added items are visible
+        setInventoryData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.map(item => {
+              if (itemIds.includes(item.id)) {
+                return { ...item, lotNumber: lotNumber };
+              }
+              return item;
+            })
+          };
+        });
+      } else {
+        setError(result.error || 'Failed to add items to lot');
+      }
+    } catch (err) {
+      console.error('Add items to lot error:', err);
+      setError('Failed to add items to lot');
+    } finally {
+      setIsAddingItems(false);
     }
   };
 
@@ -2018,6 +2151,8 @@ export default function InventoryPage() {
                   onClick={() => {
                     setShowManageLotsModal(false);
                     setEditingLot(null);
+                    setItemsToAdd([]);
+                    setAddItemSearchTerm('');
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
@@ -2039,13 +2174,97 @@ export default function InventoryPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => setEditingLot(null)}
+                        onClick={() => {
+                          setEditingLot(null);
+                          setItemsToAdd([]);
+                          setAddItemSearchTerm('');
+                        }}
                         className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-medium"
                       >
                         ← Back to Lots
                       </button>
                     </div>
 
+                    {/* Add Items Section */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                        <Plus className="h-4 w-4 mr-2 text-blue-600" />
+                        Add Items to Lot
+                      </h4>
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          type="text"
+                          value={addItemSearchTerm}
+                          onChange={(e) => setAddItemSearchTerm(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddItemSearch(addItemSearchTerm);
+                            }
+                          }}
+                          placeholder="Scan or enter item ID or ISBN..."
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={isAddingItems}
+                        />
+                        <button
+                          onClick={() => handleAddItemSearch(addItemSearchTerm)}
+                          disabled={!addItemSearchTerm.trim() || isAddingItems}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Search className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      {itemsToAdd.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          <p className="text-xs font-medium text-gray-700">
+                            Items to add ({itemsToAdd.length}):
+                          </p>
+                          {itemsToAdd.map((item) => (
+                            <div key={item.id} className="bg-white rounded-lg p-3 flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {formatItemTitle(item)}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  ID: #{item.id} • ISBN: {item.isbn}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveFromItemsToAdd(item.id)}
+                                className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 ml-2"
+                                title="Remove from list"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => handleAddItemsToLot(editingLot.lotNumber)}
+                            disabled={isAddingItems}
+                            className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                          >
+                            {isAddingItems ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Adding...
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add {itemsToAdd.length} Item{itemsToAdd.length !== 1 ? 's' : ''} to Lot
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Current Items in Lot */}
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                        Current Items in Lot ({editingLot.items.length})
+                      </h4>
+                    </div>
                     <div className="space-y-4">
                       {editingLot.items.map((item: Item) => (
                         <div key={item.id} className="bg-gray-50 rounded-lg p-4 flex items-center space-x-4">
@@ -2179,6 +2398,8 @@ export default function InventoryPage() {
                                           ...result.data,
                                           createdAt: lot.createdAt
                                         });
+                                        setItemsToAdd([]);
+                                        setAddItemSearchTerm('');
                                       }
                                     });
                                 }}

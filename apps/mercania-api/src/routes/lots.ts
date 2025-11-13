@@ -293,6 +293,114 @@ router.delete('/:lotNumber', async (req, res) => {
   }
 });
 
+// POST /lots/:lotNumber/add - Add items to an existing lot
+router.post('/:lotNumber/add', async (req, res) => {
+  try {
+    const { lotNumber } = req.params;
+    const lotNum = parseInt(lotNumber);
+    const { itemIds } = req.body;
+
+    if (isNaN(lotNum)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid lot number'
+      });
+    }
+
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'itemIds must be a non-empty array'
+      });
+    }
+
+    // Check if lot exists
+    const lotExists = await prisma.item.findFirst({
+      where: { lotNumber: lotNum }
+    });
+
+    if (!lotExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Lot not found'
+      });
+    }
+
+    // Check if all items exist
+    const items = await prisma.item.findMany({
+      where: {
+        id: { in: itemIds }
+      },
+      include: { isbnMaster: true }
+    });
+
+    if (items.length !== itemIds.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'One or more items not found'
+      });
+    }
+
+    // Check if any items are already in a lot
+    const itemsInLot = items.filter(item => item.lotNumber !== null);
+    if (itemsInLot.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Items already in lot: ${itemsInLot.map(item => `#${item.id}`).join(', ')}`
+      });
+    }
+
+    // Update all items with the lot number
+    await prisma.item.updateMany({
+      where: {
+        id: { in: itemIds }
+      },
+      data: {
+        lotNumber: lotNum
+      }
+    });
+
+    // Log status changes for all items
+    const statusHistoryPromises = itemIds.map(itemId => 
+      prisma.itemStatusHistory.create({
+        data: {
+          itemId: itemId,
+          fromStatus: null,
+          toStatus: 'INTAKE', // Keep current status but log the lot addition
+          channel: 'LOT_ADDITION',
+          note: `Added to lot #${lotNum}`
+        }
+      })
+    );
+
+    await Promise.all(statusHistoryPromises);
+
+    // Fetch updated items
+    const updatedItems = await prisma.item.findMany({
+      where: {
+        id: { in: itemIds }
+      },
+      include: { isbnMaster: true }
+    });
+
+    res.json({
+      success: true,
+      message: `Added ${itemIds.length} item(s) to lot #${lotNum}`,
+      data: {
+        lotNumber: lotNum,
+        items: updatedItems
+      }
+    });
+
+  } catch (error) {
+    console.error('Add items to lot error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
+
 // POST /lots/:lotNumber/remove - Remove a single item from a lot
 router.post('/:lotNumber/remove', async (req, res) => {
   try {
