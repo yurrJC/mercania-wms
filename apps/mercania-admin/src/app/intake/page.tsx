@@ -126,6 +126,7 @@ export default function IntakePage() {
   // DVD-specific states
   const [upcInput, setUpcInput] = useState('');
   const [dvdData, setDvdData] = useState<DVDData | null>(null);
+  const [dvdManualEntry, setDvdManualEntry] = useState(false);
   const [dvdFormData, setDvdFormData] = useState<DVDFormData>({
     upc: '',
     title: '',
@@ -214,7 +215,11 @@ export default function IntakePage() {
       } else if (productType === 'books' && !isLoading && formData.title.trim()) {
         // Book form: Enter triggers form submission
         handleBookSubmit(e as any);
-      } else if (productType === 'dvds' && !isLoading && dvdFormData.title.trim()) {
+      } else if (
+        productType === 'dvds' &&
+        !isLoading &&
+        (!isDvdTitleRequired || dvdFormData.title.trim())
+      ) {
         // DVD form: Enter triggers form submission
         handleDVDSubmit(e as any);
       } else if (productType === 'cds' && !isLoading && cdFormData.title.trim()) {
@@ -230,8 +235,18 @@ export default function IntakePage() {
     return () => {
       document.removeEventListener('keydown', handleKeyPress);
     };
-  }, [success, internalId, productType, isLoading, formData.title, dvdFormData.title, cdFormData.title]);
+  }, [
+    success,
+    internalId,
+    productType,
+    isLoading,
+    formData.title,
+    dvdFormData.title,
+    cdFormData.title,
+    isDvdTitleRequired
+  ]);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const isDvdTitleRequired = dvdManualEntry || !dvdFormData.upc.trim();
 
   // Utility function to format text as title case
   const formatTitleCase = (text: string): string => {
@@ -367,8 +382,11 @@ export default function IntakePage() {
     // 1. Duplicate warning exists (user needs to see it)
     // 2. Manual entry was used (user needs to see success and print label)
     // 3. DVD intake (always requires manual form, so always show success page)
-    const isManualEntryUsed = manualEntry || cdManualEntry;
-    const shouldStayOnSuccess = duplicateWarning?.isDuplicate || isManualEntryUsed || productType === 'dvds';
+    const shouldStayOnSuccess =
+      duplicateWarning?.isDuplicate ||
+      manualEntry ||
+      cdManualEntry ||
+      (productType === 'dvds' && dvdManualEntry);
     
     if (success && internalId && !shouldStayOnSuccess) {
       // Auto-reset after a short delay if no duplicate warning and not manual entry
@@ -378,7 +396,7 @@ export default function IntakePage() {
 
       return () => clearTimeout(timer);
     }
-  }, [success, internalId, duplicateWarning, manualEntry, cdManualEntry, productType]);
+  }, [success, internalId, duplicateWarning, manualEntry, cdManualEntry, dvdManualEntry, productType]);
 
   // Book functions
   const fetchBookData = async (isbn: string): Promise<void> => {
@@ -437,13 +455,17 @@ export default function IntakePage() {
 
   // DVD functions
   const handleDVDBarcodeScan = (upc: string): void => {
-    // Just populate the UPC field and show the form - no API call needed
-    // DVDs don't have auto-lookup, so always show edit form
-    setIsManualEntry(false); // UPC scanned but still need to edit
-    setShouldAutoSubmit(false); // DVDs always require manual form completion
-    setDvdFormData(prev => ({
-      ...prev,
-      upc: upc,
+    const cleanUpc = upc.trim();
+    const isManual = cleanUpc.length === 0;
+    
+    // Track manual vs scanned entries so we can enforce field requirements later
+    setDvdManualEntry(isManual);
+    setIsManualEntry(isManual);
+    setShouldAutoSubmit(false); // DVDs still require explicit confirmation flow
+    setUpcInput(cleanUpc);
+    
+    setDvdFormData(() => ({
+      upc: cleanUpc,
       title: '',
       director: '',
       studio: '',
@@ -455,14 +477,14 @@ export default function IntakePage() {
       genre: '',
       rating: '',
       runtime: null,
-        conditionGrade: 'GOOD',
-        conditionNotes: '',
-        costCents: 0
+      conditionGrade: 'GOOD',
+      conditionNotes: '',
+      costCents: 0
     }));
     
-    // Show the form by setting dvdData to trigger the form display
+    // Show the form with either manual or scanned context
     setDvdData({
-      upc: upc,
+      upc: cleanUpc,
       title: '',
       director: '',
       studio: '',
@@ -525,20 +547,32 @@ export default function IntakePage() {
 
   const handleDVDSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!dvdFormData.title.trim()) return;
+    
+    if (isDvdTitleRequired && !dvdFormData.title.trim()) {
+      setError('Title is required when no UPC/barcode is provided.');
+      return;
+    }
+    
+    const normalizedUpc = dvdFormData.upc.trim();
+    if (!dvdManualEntry && !normalizedUpc) {
+      setError('Scan or enter a UPC before submitting.');
+      return;
+    }
     
     setIsLoading(true);
     setError('');
     
     try {
+      const resolvedTitle = dvdFormData.title.trim() || (normalizedUpc ? `DVD UPC ${normalizedUpc}` : 'DVD Item');
+      
       const response = await apiCall('/api/intake', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          isbn: dvdFormData.upc || '', // Use UPC as identifier, empty string if none
-          title: dvdFormData.title,
+          isbn: normalizedUpc || '', // Use UPC as identifier, empty string if none
+          title: resolvedTitle,
           author: dvdFormData.director, // Director maps to author field
           publisher: dvdFormData.studio, // Studio maps to publisher field
           pubYear: dvdFormData.releaseYear,
@@ -681,6 +715,7 @@ export default function IntakePage() {
     setCdData(null);
     setManualEntry(false);
     setCdManualEntry(false);
+    setDvdManualEntry(false);
     setIsManualEntry(false);
     setShouldAutoSubmit(false);
     setFormData({
@@ -1475,6 +1510,11 @@ export default function IntakePage() {
                   <h2 className="text-xl font-semibold text-gray-900">
                     DVD Information
                   </h2>
+                  {dvdManualEntry && (
+                    <div className="ml-3 bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-medium">
+                      Manual Entry
+                    </div>
+                  )}
             </div>
 
                 <form onSubmit={handleDVDSubmit} className="space-y-3">
@@ -1491,14 +1531,21 @@ export default function IntakePage() {
           </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Title {isDvdTitleRequired ? '*' : '(optional when UPC scanned)'}
+                      </label>
                       <input
                         type="text"
                         value={dvdFormData.title}
                         onChange={(e) => handleTitleCaseInput(e.target.value, setDvdFormData, 'title')}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        required
+                        required={isDvdTitleRequired}
                       />
+                      {!isDvdTitleRequired && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Leave blank to auto-use the scanned UPC as the title placeholder.
+                        </p>
+                      )}
                     </div>
                     
               <div>
@@ -1701,7 +1748,11 @@ export default function IntakePage() {
                   <div className="flex space-x-4">
               <button
                 type="submit"
-                      disabled={isLoading || !dvdFormData.title.trim()}
+                disabled={
+                  isLoading ||
+                  (isDvdTitleRequired && !dvdFormData.title.trim()) ||
+                  (!dvdManualEntry && !dvdFormData.upc.trim())
+                }
                 className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
               >
                       {isLoading ? 'Adding DVD...' : 'Confirm & Add to Inventory'}
