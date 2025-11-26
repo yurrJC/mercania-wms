@@ -464,7 +464,7 @@ export default function IntakePage() {
     setShouldAutoSubmit(false); // DVDs still require explicit confirmation flow
     setUpcInput(cleanUpc);
     
-    setDvdFormData(() => ({
+    setDvdFormData({
       upc: cleanUpc,
       title: '',
       director: '',
@@ -480,7 +480,7 @@ export default function IntakePage() {
       conditionGrade: 'GOOD',
       conditionNotes: '',
       costCents: 0
-    }));
+    });
     
     // Show the form with either manual or scanned context
     setDvdData({
