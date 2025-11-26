@@ -193,6 +193,9 @@ export default function IntakePage() {
     loadPrinters();
   }, []);
 
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const isDvdTitleRequired = dvdManualEntry || !dvdFormData.upc.trim();
+
   // Global keyboard handler for Enter key shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -245,8 +248,6 @@ export default function IntakePage() {
     cdFormData.title,
     isDvdTitleRequired
   ]);
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
-  const isDvdTitleRequired = dvdManualEntry || !dvdFormData.upc.trim();
 
   // Utility function to format text as title case
   const formatTitleCase = (text: string): string => {
@@ -477,9 +478,9 @@ export default function IntakePage() {
       genre: '',
       rating: '',
       runtime: null,
-      conditionGrade: 'GOOD',
-      conditionNotes: '',
-      costCents: 0
+        conditionGrade: 'GOOD',
+        conditionNotes: '',
+        costCents: 0
     });
     
     // Show the form with either manual or scanned context
